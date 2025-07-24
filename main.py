@@ -90,7 +90,7 @@ class EchoImagePlugin(Star):
         if message_text.strip().startswith("以图搜图"):
             parts = message_text.strip().split()
             if user_id in self.user_states:
-                return  # Avoid re-initializing if already in state
+                del self.user_states[user_id]  # Reset state to restart process
 
             engine = None
             url_from_text = None

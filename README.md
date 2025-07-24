@@ -4,16 +4,16 @@
 
 ## 支持的搜索引擎
 
-| 引擎 | 网址 | 二次元图片专用 | 中国大陆直连 |
-|------|------|---------|------------------|
-| AnimeTrace | [https://www.animetrace.com/](https://www.animetrace.com/) | ✅       | ✅ |
-| Baidu | [https://graph.baidu.com/](https://graph.baidu.com/) | ❌       | ✅ |
-| Bing | [https://www.bing.com/images/search](https://www.bing.com/images/search) | ❌       | ❌ |
-| Copyseeker | [https://copyseeker.net/](https://copyseeker.net/) | ❌       | ❌ |
-| E-Hentai | [https://e-hentai.org/](https://e-hentai.org/) | ✅       | ❌ |
-| Google Lens | [https://lens.google.com/](https://lens.google.com/) | ❌       | ❌ |
-| SauceNAO | [https://saucenao.com/](https://saucenao.com/) | ✅       | ✅ |
-| Tineye | [https://tineye.com/search/](https://tineye.com/search/) | ❌       | ❌ |
+| 引擎         | 网址 | 二次元图片专用 | 中国大陆直连 |
+|------------|------|---------|------------------|
+| animetrace      | [https://www.animetrace.com/](https://www.animetrace.com/) | ✅       | ✅ |
+| baidu      | [https://graph.baidu.com/](https://graph.baidu.com/) | ❌       | ✅ |
+| bing       | [https://www.bing.com/images/search](https://www.bing.com/images/search) | ❌       | ❌ |
+| copyseeker | [https://copyseeker.net/](https://copyseeker.net/) | ❌       | ❌ |
+| ehentai    | [https://e-hentai.org/](https://e-hentai.org/) | ✅       | ❌ |
+| google     | [https://lens.google.com/](https://lens.google.com/) | ❌       | ❌ |
+| saucenao   | [https://saucenao.com/](https://saucenao.com/) | ✅       | ✅ |
+| tineye     | [https://tineye.com/search/](https://tineye.com/search/) | ❌       | ❌ |
 
 ## 使用指南
 

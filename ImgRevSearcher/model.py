@@ -3,9 +3,9 @@ import io
 from pathlib import Path
 from typing import Any, Optional, Union
 from PIL import Image, ImageDraw, ImageFont
-from config_manager import DEFAULT_COOKIES, DEFAULT_PARAMS, ENGINE_MAP, PROXIES
-from utils import Network
-from utils.types import FileContent
+from .config_manager import DEFAULT_COOKIES, DEFAULT_PARAMS, ENGINE_MAP, PROXIES
+from .utils import Network
+from .utils.types import FileContent
 
 
 class BaseSearchModel:

@@ -4,7 +4,7 @@
 
 ## 🛠 安装方法
 
-### 1. 通过插件市场安装
+### 方式一：插件市场
 
 - 打开 **AstrBot WebUI** → **插件市场** → 右上角 **Search**
 - 搜索与本项目相关的关键词，找到插件后点击安装
@@ -13,13 +13,34 @@
   astrbot_plugin_img_rev_seacher
   ```
 
-### 2. 通过 Github 仓库链接安装
+### 方式二：Github 仓库链接
 
 - 打开 **AstrBot WebUI** → **插件管理** → **+ 安装**
 - 在出现的输入框内粘贴以下仓库地址并点击安装：
   ```
   https://github.com/drdon1234/astrbot_plugin_img_rev_seacher
   ```
+
+### 📦 依赖库安装（重要）
+
+请先安装以下依赖库：
+
+- httpx
+- Pillow
+- pyquery
+- typing_extensions
+
+在终端执行：
+
+```
+pip install -r requirements.txt
+```
+或逐个安装：
+
+```
+pip install <module>
+```
+*使用具体模块名替换 &lt;module&gt;*
 
 ## 🚀 使用说明
 
@@ -79,26 +100,11 @@
 > - 无痕 cookie 格式一般为 `AEC= ; NID= ; DV=`，有效期大约1天
 > - 登录状态下 Cookie 有效期很短，不建议使用
 
-## 📦 依赖库安装（重要）
+## 📝 注意事项
 
-请先安装以下依赖库：
-
-- httpx
-- Pillow
-- pyquery
-- typing_extensions
-
-在终端执行：
-
-```
-pip install -r requirements.txt
-```
-或逐个安装：
-
-```
-pip install 
-```
-*将 `` 替换为具体库名称*
+- `exhentai` 和 `google_lens` 对 **地区** 有严格检查
+- `exhentai` 要求 **优质欧美 IP**
+- `google_lens` 要求参数 `country` 不能为 `CN`，且`IP`必须与`country`相符合
 
 ---
 
@@ -373,7 +379,3 @@ SauceNAOResponse
 TineyeResponse
 ```
 包含搜索结果、域名信息和元数据。
-
-## 📝 注意事项
-
-- 所有服务都只能提供`url`或`file`参数中的一个

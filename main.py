@@ -50,6 +50,18 @@ class EchoImagePlugin(Star):
                         img_urls.append(url)
         return img_urls
 
+    def _get_message_text(self, message) -> str:
+        raw_message = getattr(message, 'raw_message', '')
+        if isinstance(raw_message, str):
+            return raw_message.strip()
+        elif isinstance(raw_message, dict) and "message" in raw_message:
+            texts = []
+            for msg_part in raw_message.get("message", []):
+                if msg_part.get("type") == "text":
+                    texts.append(msg_part.get("data", {}).get("text", ""))
+            return " ".join(texts).strip()
+        return ''
+
     async def _download_img(self, url: str):
         try:
             r = await self.client.get(url, timeout=15)
@@ -68,11 +80,45 @@ class EchoImagePlugin(Star):
     @filter.command("以图搜图")
     async def start_search(self, event: AstrMessageEvent):
         user_id = event.get_sender_id()
-        self.user_states[user_id] = {
-            "step": "waiting_image",
-            "timestamp": time.time()
-        }
-        yield event.plain_result("请在30秒内发送一张图片，我会进行搜索")
+        message_text = self._get_message_text(event.message_obj)
+        parts = message_text.strip().split()
+        img_urls = self._get_img_urls(event.message_obj)
+        preloaded_img = None
+        if img_urls:
+            preloaded_img = await self._download_img(img_urls[0])
+
+        if len(parts) > 1:
+            engine = parts[1]
+            if preloaded_img:
+                model = BaseSearchModel()
+                result_img = await model.search_and_draw(api=engine, file=preloaded_img.getvalue(), is_auto_save=False)
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
+                    result_img.save(temp_file, format="JPEG", quality=85)
+                    temp_file_path = temp_file.name
+                yield event.chain_result([AstrImage.fromFileSystem(temp_file_path)])
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+                event.stop_event()
+                return
+            else:
+                self.user_states[user_id] = {
+                    "step": "waiting_image",
+                    "engine": engine,
+                    "timestamp": time.time()
+                }
+                yield event.plain_result(f"使用引擎 {engine}。请在30秒内发送一张图片，我会进行搜索")
+        else:
+            self.user_states[user_id] = {
+                "step": "waiting_engine",
+                "timestamp": time.time(),
+                "preloaded_img": preloaded_img
+            }
+            intro_path = "ImgRevSearcher/resource/img/engine_intro.jpg"
+            yield event.chain_result([AstrImage.fromFileSystem(intro_path)])
+            if preloaded_img:
+                yield event.plain_result("图片已接收。请回复引擎名（如baidu），30秒内有效")
+            else:
+                yield event.plain_result("请选择引擎（回复引擎名，如baidu），30秒内有效")
 
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def on_message(self, event: AstrMessageEvent):
@@ -80,13 +126,41 @@ class EchoImagePlugin(Star):
         if user_id not in self.user_states:
             return
         state = self.user_states[user_id]
-        if state["step"] != "waiting_image":
-            return
         if time.time() - state["timestamp"] > 30:
-            yield event.plain_result("等待图片超时，操作取消。")
+            yield event.plain_result("等待超时，操作取消。")
             del self.user_states[user_id]
             event.stop_event()
             return
+
+        if state["step"] == "waiting_engine":
+            message_text = self._get_message_text(event.message_obj)
+            if message_text:
+                state["engine"] = message_text
+                if state.get("preloaded_img"):
+                    preloaded_img = state["preloaded_img"]
+                    model = BaseSearchModel()
+                    result_img = await model.search_and_draw(api=state["engine"], file=preloaded_img.getvalue(), is_auto_save=False)
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
+                        result_img.save(temp_file, format="JPEG", quality=85)
+                        temp_file_path = temp_file.name
+                    yield event.chain_result([AstrImage.fromFileSystem(temp_file_path)])
+                    if os.path.exists(temp_file_path):
+                        os.unlink(temp_file_path)
+                    del self.user_states[user_id]
+                    event.stop_event()
+                    return
+                else:
+                    state["step"] = "waiting_image"
+                    state["timestamp"] = time.time()
+                    yield event.plain_result(f"已选择引擎: {message_text}。请在30秒内发送一张图片，我会进行搜索")
+            else:
+                yield event.plain_result("请回复有效的引擎名。")
+            event.stop_event()
+            return
+
+        if state["step"] != "waiting_image":
+            return
+
         img_urls = self._get_img_urls(event.message_obj)
         if img_urls:
             img_buffer = await self._download_img(img_urls[0])
@@ -95,7 +169,7 @@ class EchoImagePlugin(Star):
                 del self.user_states[user_id]
                 return
             model = BaseSearchModel()
-            result_img = await model.search_and_draw(api="baidu", file=img_buffer.getvalue(), is_auto_save=False)
+            result_img = await model.search_and_draw(api=state["engine"], file=img_buffer.getvalue(), is_auto_save=False)
             with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
                 result_img.save(temp_file, format="JPEG", quality=85)
                 temp_file_path = temp_file.name

@@ -4,12 +4,12 @@ from .utils.api_request import AnimeTrace, BaiDu, Bing, Copyseeker, EHentai, Goo
 
 
 ENGINE_MAP = {
-    "anime_trace": AnimeTrace,
+    "animetrace": AnimeTrace,
     "baidu": BaiDu,
     "bing": Bing,
     "copyseeker": Copyseeker,
     "ehentai": EHentai,
-    "google_lens": GoogleLens,
+    "google": GoogleLens,
     "saucenao": SauceNAO,
     "tineye": Tineye,
 }

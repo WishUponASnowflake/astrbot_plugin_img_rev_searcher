@@ -63,6 +63,9 @@ class EchoImagePlugin(Star):
             return " ".join(texts).strip()
         return ''
 
+    def _is_image_url(self, text: str) -> bool:
+        return text.startswith("https://") and text.lower().endswith((".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"))
+
     async def _download_img(self, url: str):
         try:
             r = await self.client.get(url, timeout=15)
@@ -83,18 +86,31 @@ class EchoImagePlugin(Star):
         user_id = event.get_sender_id()
         message_text = self._get_message_text(event.message_obj)
         img_urls = self._get_img_urls(event.message_obj)
-        preloaded_img = None
-        if img_urls:
-            preloaded_img = await self._download_img(img_urls[0])
 
         if message_text.strip().startswith("以图搜图"):
             parts = message_text.strip().split()
             if user_id in self.user_states:
                 return  # Avoid re-initializing if already in state
 
+            engine = None
+            url_from_text = None
             if len(parts) > 1:
-                engine = parts[1]
+                if self._is_image_url(parts[1]):
+                    url_from_text = parts[1]
+                else:
+                    engine = parts[1]
+
+            preloaded_img = None
+            if img_urls:
+                preloaded_img = await self._download_img(img_urls[0])
+            elif url_from_text:
+                preloaded_img = await self._download_img(url_from_text)
+
+            if engine:
                 if preloaded_img:
+                    if not preloaded_img:
+                        yield event.plain_result("图片下载失败，请稍后重试。")
+                        return
                     model = BaseSearchModel()
                     result_img = await model.search_and_draw(api=engine, file=preloaded_img.getvalue(), is_auto_save=False)
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
@@ -111,7 +127,7 @@ class EchoImagePlugin(Star):
                         "engine": engine,
                         "timestamp": time.time()
                     }
-                    yield event.plain_result(f"使用引擎 {engine}。请在30秒内发送一张图片，我会进行搜索")
+                    yield event.plain_result(f"使用引擎 {engine}。请在30秒内发送一张图片或图片URL，我会进行搜索")
             else:
                 self.user_states[user_id] = {
                     "step": "waiting_engine",
@@ -119,7 +135,7 @@ class EchoImagePlugin(Star):
                     "preloaded_img": preloaded_img
                 }
                 workspace_root = Path(__file__).parent
-                intro_path = workspace_root / "ImgRevSearcher" / "resource" / "img" / "engine_intro.jpg"
+                intro_path = workspace_root / "ImgRevSearcher/resource/img/engine_intro.jpg"
                 with intro_path.open('rb') as f:
                     intro_content = f.read()
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
@@ -173,8 +189,13 @@ class EchoImagePlugin(Star):
             return
 
         img_urls = self._get_img_urls(event.message_obj)
+        message_text = self._get_message_text(event.message_obj)
+        img_buffer = None
         if img_urls:
             img_buffer = await self._download_img(img_urls[0])
+        elif self._is_image_url(message_text):
+            img_buffer = await self._download_img(message_text)
+        if img_buffer:
             if not img_buffer:
                 yield event.plain_result("图片下载失败，请稍后重试。")
                 del self.user_states[user_id]
@@ -189,3 +210,5 @@ class EchoImagePlugin(Star):
                 os.unlink(temp_file_path)
             del self.user_states[user_id]
             event.stop_event()
+        else:
+            yield event.plain_result("请发送一张图片或图片URL。")

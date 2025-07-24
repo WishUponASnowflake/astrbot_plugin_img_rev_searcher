@@ -3,9 +3,22 @@ import io
 from pathlib import Path
 from typing import Any, Optional, Union
 from PIL import Image, ImageDraw, ImageFont
-from .config_manager import DEFAULT_COOKIES, DEFAULT_PARAMS, ENGINE_MAP, PROXIES
 from .utils import Network
 from .utils.types import FileContent
+from .utils.api_request import AnimeTrace, BaiDu, Bing, Copyseeker, EHentai, GoogleLens, SauceNAO, Tineye
+
+
+# 定义搜索引擎映射
+ENGINE_MAP = {
+    "animetrace": AnimeTrace,
+    "baidu": BaiDu,
+    "bing": Bing,
+    "copyseeker": Copyseeker,
+    "ehentai": EHentai,
+    "google": GoogleLens,
+    "saucenao": SauceNAO,
+    "tineye": Tineye,
+}
 
 
 class BaseSearchModel:
@@ -16,8 +29,9 @@ class BaseSearchModel:
     可以输出文本结果或生成可视化图像结果，支持GIF格式自动转换
     """
 
-    def __init__(self, proxies: Optional[str] = PROXIES, cookies: Optional[str] = None,
-                 timeout: int = 60, **kwargs: Any):
+    def __init__(self, proxies: Optional[str] = None, cookies: Optional[dict] = None,
+                 timeout: int = 60, default_params: Optional[dict] = None, 
+                 default_cookies: Optional[dict] = None):
         """
         初始化搜索模型
 
@@ -25,12 +39,14 @@ class BaseSearchModel:
             proxies: 代理服务器配置
             cookies: Cookie配置
             timeout: 请求超时时间(秒)
-            **kwargs: 其他配置参数
+            default_params: 各引擎的默认参数
+            default_cookies: 各引擎的默认Cookie
         """
         self.proxies = proxies
         self.cookies = cookies
         self.timeout = timeout
-        self.config = kwargs
+        self.default_params = default_params or {}
+        self.default_cookies = default_cookies or {}
 
     def _prepare_engine_params(self, api: str, search_params: dict) -> dict:
         """
@@ -146,24 +162,23 @@ class BaseSearchModel:
             file = self._convert_gif_to_jpeg(file)
         try:
             engine_class = ENGINE_MAP[api]
-            default_params = DEFAULT_PARAMS.get(api, {})
+            default_params = self.default_params.get(api, {})
             search_params = {**default_params, **kwargs}
-
             network_kwargs = {}
             if self.proxies:
                 network_kwargs["proxies"] = self.proxies
-
-            effective_cookies = self.cookies or DEFAULT_COOKIES.get(api)
+            effective_cookies = None
+            if api in self.default_cookies:
+                effective_cookies = self.default_cookies.get(api)
+            elif self.cookies:
+                effective_cookies = self.cookies
             if effective_cookies:
                 network_kwargs["cookies"] = effective_cookies
-
             if self.timeout:
                 network_kwargs["timeout"] = self.timeout
-
             async with Network(**network_kwargs) as client:
                 engine_params = self._prepare_engine_params(api, search_params)
                 engine_instance = engine_class(client=client, **engine_params)
-
                 if api == "animetrace" and search_params.get("base64"):
                     response = await engine_instance.search(
                         base64=search_params.pop("base64"),
@@ -172,7 +187,6 @@ class BaseSearchModel:
                     )
                 else:
                     response = await engine_instance.search(file=file, url=url, **search_params)
-
                 return response.show_result()
         except Exception as e:
             return self._format_error(api, str(e))

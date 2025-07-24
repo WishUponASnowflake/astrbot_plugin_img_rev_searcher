@@ -6,28 +6,49 @@ import tempfile
 import time
 from typing import List
 import httpx
+from PIL import Image
 from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.message_components import Image as AstrImage
 from astrbot.api.star import Context, Star, register
 from pathlib import Path
 from .ImgRevSearcher.model import BaseSearchModel
-from PIL import Image
 
 
 @register("astrbot_plugin_img_rev_seacher", "drdon1234", "以图搜图，找出处", "1.0")
 class ImgRevSearcherPlugin(Star):
-    def __init__(self, context: Context):
+    def __init__(self, context: Context, config: dict):
         """
         初始化插件
 
         参数:
             context: Astrbot上下文对象
+            config: 配置文件中的配置
         """
         super().__init__(context)
         self.client = httpx.AsyncClient()
         self.user_states = {}
         self.cleanup_task = asyncio.create_task(self.cleanup_loop())
         self.available_engines = ["animetrace", "baidu", "bing", "copyseeker", "ehentai", "google", "saucenao", "tineye"]
+        proxies = config.get("proxies", {})
+        default_params = {}
+        if "default_params" in config:
+            params_config = config["default_params"].get("items", {})
+            for engine, engine_config in params_config.items():
+                engine_params = {}
+                for param_name, param_config in engine_config.get("items", {}).items():
+                    engine_params[param_name] = param_config.get("default")
+                default_params[engine] = engine_params
+        default_cookies = {}
+        if "default_cookies" in config:
+            cookies_config = config["default_cookies"].get("items", {})
+            for engine, cookie_config in cookies_config.items():
+                default_cookies[engine] = cookie_config.get("default")
+        self.search_model = BaseSearchModel(
+            proxies=proxies,
+            timeout=60,
+            default_params=default_params,
+            default_cookies=default_cookies
+        )
 
     async def cleanup_loop(self):
         """
@@ -191,21 +212,21 @@ class ImgRevSearcherPlugin(Star):
         产生:
             搜索结果消息
         """
-        model = BaseSearchModel()
+        # 使用初始化时创建的搜索模型实例
         file_bytes = img_buffer.getvalue()
-        result_text = await model.search(api=engine, file=file_bytes)
+        result_text = await self.search_model.search(api=engine, file=file_bytes)
         img_buffer.seek(0)
         try:
             source_image = Image.open(img_buffer)
-            result_img = model.draw_results(engine, result_text, source_image, is_auto_save=False)
+            result_img = self.search_model.draw_results(engine, result_text, source_image, is_auto_save=False)
         except Exception as e:
-            result_img = model.draw_error(engine, str(e), is_auto_save=False)
+            result_img = self.search_model.draw_error(engine, str(e), is_auto_save=False)
         with io.BytesIO() as output:
             result_img.save(output, format="JPEG", quality=85)
             output.seek(0)
             async for result in self._send_image(event, output.getvalue()):
                 yield result
-        yield event.plain_result("需要文本格式的结果吗？回复“是”以获取，10秒内有效。")
+        yield event.plain_result("需要文本格式的结果吗？回复\"是\"以获取，10秒内有效。")
         user_id = event.get_sender_id()
         self.user_states[user_id] = {
             "step": "waiting_text_confirm",
@@ -248,7 +269,6 @@ class ImgRevSearcherPlugin(Star):
         user_id = event.get_sender_id()
         message_text = self._get_message_text(event.message_obj)
         img_urls = self._get_img_urls(event.message_obj)
-
         if user_id in self.user_states:
             state = self.user_states[user_id]
             if state.get("step") == "waiting_text_confirm":
@@ -267,12 +287,10 @@ class ImgRevSearcherPlugin(Star):
                     del self.user_states[user_id]
                     event.stop_event()
                     return
-
         if message_text.strip().startswith("以图搜图"):
             parts = message_text.strip().split()
             if user_id in self.user_states:
                 del self.user_states[user_id]
-
             engine = None
             url_from_text = None
             invalid_engine = False
@@ -287,7 +305,6 @@ class ImgRevSearcherPlugin(Star):
                         invalid_engine = True
                     if len(parts) > 2 and self._is_image_url(parts[2]):
                         url_from_text = parts[2]
-
             preloaded_img = None
             if img_urls:
                 preloaded_img = await self._download_img(img_urls[0])
@@ -329,7 +346,6 @@ class ImgRevSearcherPlugin(Star):
                     yield result
             event.stop_event()
             return
-
         if user_id not in self.user_states:
             return
         state = self.user_states[user_id]
@@ -338,7 +354,6 @@ class ImgRevSearcherPlugin(Star):
             del self.user_states[user_id]
             event.stop_event()
             return
-
         if state["step"] == "waiting_engine":
             message_text = self._get_message_text(event.message_obj).lower()
             if message_text:
@@ -353,7 +368,7 @@ class ImgRevSearcherPlugin(Star):
                     else:
                         state["step"] = "waiting_image"
                         state["timestamp"] = time.time()
-                        yield event.plain_result(f"已选择引擎: {message_text}请在30秒内发送一张图片，我会进行搜索")
+                        yield event.plain_result(f"已选择引擎: {message_text}，请在30秒内发送一张图片，我会进行搜索")
                 else:
                     state.setdefault("invalid_attempts", 0)
                     state["invalid_attempts"] += 1
@@ -372,7 +387,6 @@ class ImgRevSearcherPlugin(Star):
                 state["timestamp"] = time.time()
             event.stop_event()
             return
-
         if state["step"] == "waiting_both":
             updated = False
             message_text = self._get_message_text(event.message_obj).lower()
@@ -424,10 +438,8 @@ class ImgRevSearcherPlugin(Star):
                         yield event.plain_result("请提供图片")
             event.stop_event()
             return
-
         if state["step"] != "waiting_image":
             return
-
         img_urls = self._get_img_urls(event.message_obj)
         message_text = self._get_message_text(event.message_obj)
         img_buffer = None

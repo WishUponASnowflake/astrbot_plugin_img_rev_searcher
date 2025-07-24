@@ -76,7 +76,7 @@
 5. 复制完整 Cookie 内容，粘贴至配置文件的 `default_cookies.google` 项
 
 > **注意：**
-> - 无痕 cookie 格式一般为 `AEC= ; NID= ; DV=`，有效期大约6个月
+> - 无痕 cookie 格式一般为 `AEC= ; NID= ; DV=`，有效期大约1天
 > - 登录状态下 Cookie 有效期很短，不建议使用
 
 ## 📦 依赖库安装（重要）

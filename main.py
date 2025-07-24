@@ -119,6 +119,7 @@ class EchoImagePlugin(Star):
                 yield event.plain_result("图片已接收。请回复引擎名（如baidu），30秒内有效")
             else:
                 yield event.plain_result("请选择引擎（回复引擎名，如baidu），30秒内有效")
+        event.stop_event()
 
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def on_message(self, event: AstrMessageEvent):

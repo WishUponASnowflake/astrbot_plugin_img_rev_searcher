@@ -73,18 +73,13 @@ class ImgRevSearcherPlugin(Star):
             List[str]: 图像URL列表
         """
         img_urls = []
-        for component_str in getattr(message, 'message', []):
-            if "type='Image'" in str(component_str):
-                url_match = re.search(r"url='([^']+)'", str(component_str))
-                if url_match:
-                    img_urls.append(url_match.group(1))
         raw_message = getattr(message, 'raw_message', '')
         if isinstance(raw_message, dict) and "message" in raw_message:
             for msg_part in raw_message.get("message", []):
                 if msg_part.get("type") == "image":
                     data = msg_part.get("data", {})
                     url = data.get("url", "")
-                    if url and url not in img_urls:
+                    if url:
                         img_urls.append(url)
         return img_urls
 
@@ -207,15 +202,15 @@ class ImgRevSearcherPlugin(Star):
         img_buffer.seek(0)
         try:
             source_image = Image.open(img_buffer)
-            result_img = self.search_model.draw_results(engine, result_text, source_image, is_auto_save=False)
+            result_img = self.search_model.draw_results(engine, result_text, source_image)
         except Exception as e:
-            result_img = self.search_model.draw_error(engine, str(e), is_auto_save=False)
+            result_img = self.search_model.draw_error(engine, str(e))
         with io.BytesIO() as output:
             result_img.save(output, format="JPEG", quality=85)
             output.seek(0)
             async for result in self._send_image(event, output.getvalue()):
                 yield result
-        yield event.plain_result("需要文本格式的结果吗？回复\"是\"以获取，10秒内有效。")
+        yield event.plain_result("需要文本格式的结果吗？回复\"是\"以获取，10秒内有效")
         user_id = event.get_sender_id()
         self.user_states[user_id] = {
             "step": "waiting_text_confirm",

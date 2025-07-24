@@ -215,6 +215,60 @@ class HandOver:
         self.timeout: float = timeout
         self.verify_ssl: bool = verify_ssl
         self.http2: bool = http2
+        # 创建一个单一的ClientManager实例
+        self.client_manager = ClientManager(
+            self.client,
+            self.proxies,
+            self.headers,
+            self.cookies,
+            self.timeout,
+            self.verify_ssl,
+            self.http2,
+        )
+        self._client_initialized = False
+        self._managed_client = None
+
+    async def _get_client(self) -> AsyncClient:
+        """
+        获取HTTP客户端实例
+        
+        返回:
+            AsyncClient: HTTP客户端实例
+        """
+        if not self._client_initialized:
+            self._managed_client = await self.client_manager.__aenter__()
+            self._client_initialized = True
+        return self._managed_client
+
+    async def close(self) -> None:
+        """
+        关闭HTTP客户端连接
+        """
+        if self._client_initialized:
+            await self.client_manager.__aexit__(None, None, None)
+            self._client_initialized = False
+            self._managed_client = None
+
+    async def __aenter__(self) -> 'HandOver':
+        """
+        异步上下文管理器入口
+        
+        返回:
+            HandOver: 当前实例
+        """
+        await self._get_client()
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: Optional[type[BaseException]] = None,
+        exc_val: Optional[BaseException] = None,
+        exc_tb: Optional[TracebackType] = None,
+    ) -> None:
+        """
+        异步上下文管理器退出
+        """
+        await self.close()
 
     async def get(
         self,
@@ -235,17 +289,9 @@ class HandOver:
         返回:
             RESP: 简化的HTTP响应对象
         """
-        async with ClientManager(
-            self.client,
-            self.proxies,
-            self.headers,
-            self.cookies,
-            self.timeout,
-            self.verify_ssl,
-            self.http2,
-        ) as client:
-            resp = await client.get(url, params=params, headers=headers, **kwargs)
-            return RESP(resp.text, str(resp.url), resp.status_code)
+        client = await self._get_client()
+        resp = await client.get(url, params=params, headers=headers, **kwargs)
+        return RESP(resp.text, str(resp.url), resp.status_code)
 
     async def post(
         self,
@@ -272,25 +318,17 @@ class HandOver:
         返回:
             RESP: 简化的HTTP响应对象
         """
-        async with ClientManager(
-            self.client,
-            self.proxies,
-            self.headers,
-            self.cookies,
-            self.timeout,
-            self.verify_ssl,
-            self.http2,
-        ) as client:
-            resp = await client.post(
-                url,
-                params=params,
-                headers=headers,
-                data=data,
-                files=files,
-                json=json,
-                **kwargs,
-            )
-            return RESP(resp.text, str(resp.url), resp.status_code)
+        client = await self._get_client()
+        resp = await client.post(
+            url,
+            params=params,
+            headers=headers,
+            data=data,
+            files=files,
+            json=json,
+            **kwargs,
+        )
+        return RESP(resp.text, str(resp.url), resp.status_code)
 
     async def download(self, url: str, headers: Optional[dict[str, str]] = None) -> bytes:
         """
@@ -303,14 +341,6 @@ class HandOver:
         返回:
             bytes: 下载的文件内容
         """
-        async with ClientManager(
-            self.client,
-            self.proxies,
-            self.headers,
-            self.cookies,
-            self.timeout,
-            self.verify_ssl,
-            self.http2,
-        ) as client:
-            resp = await client.get(url, headers=headers)
-            return resp.read()
+        client = await self._get_client()
+        resp = await client.get(url, headers=headers)
+        return resp.read()

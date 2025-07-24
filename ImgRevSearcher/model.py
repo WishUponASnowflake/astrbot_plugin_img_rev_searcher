@@ -212,7 +212,7 @@ class BaseSearchModel:
             print(f"❌ {api} 搜索失败: {e}")
 
     async def search_and_draw(self, api: str, file: FileContent = None,
-                              url: Optional[str] = None, is_auto_save: bool = False, **kwargs: Any) -> Image.Image:
+                              url: Optional[str] = None, **kwargs: Any) -> Image.Image:
         """
         执行搜索并将结果渲染为图像
 
@@ -220,7 +220,6 @@ class BaseSearchModel:
             api: 搜索引擎API名称
             file: 本地文件内容
             url: 图像URL
-            is_auto_save: 是否自动保存结果图像
             **kwargs: 其他搜索参数
 
         返回:
@@ -244,9 +243,9 @@ class BaseSearchModel:
                     response = await client.get(url)
                     img_data = await response.aread()
                     source_image = Image.open(io.BytesIO(img_data))
-            return self.draw_results(api, result, source_image, is_auto_save)
+            return self.draw_results(api, result, source_image)
         except Exception as e:
-            return self.draw_error(api, str(e), is_auto_save)
+            return self.draw_error(api, str(e))
 
     def _format_error(self, api: str, error_msg: str) -> str:
         """
@@ -276,7 +275,7 @@ class BaseSearchModel:
         """
         return list(ENGINE_MAP.keys())
 
-    def draw_results(self, api: str, result: str, source_image: Optional[Image.Image] = None, is_auto_save: bool = False) -> Image.Image:
+    def draw_results(self, api: str, result: str, source_image: Optional[Image.Image] = None) -> Image.Image:
         """
         绘制搜索结果图像
 
@@ -286,7 +285,6 @@ class BaseSearchModel:
             api: 搜索引擎API名称
             result: 搜索结果文本
             source_image: 源图像（可选）
-            is_auto_save: 是否自动保存结果图像
 
         返回:
             Image.Image: 渲染后的结果图像
@@ -352,16 +350,9 @@ class BaseSearchModel:
             else:
                 draw.text((margin, y_position), line, font=font, fill='black')
             y_position += line_height
-        if is_auto_save:
-            save_dir = Path("search_results")
-            save_dir.mkdir(exist_ok=True)
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            file_name = f"{api}_{timestamp}.jpeg"
-            save_path = save_dir / file_name
-            img.save(save_path, "JPEG", quality=85)
         return img
 
-    def draw_error(self, api: str, error_msg: str, is_auto_save: bool = False) -> Image.Image:
+    def draw_error(self, api: str, error_msg: str) -> Image.Image:
         """
         绘制错误信息图像
 
@@ -370,7 +361,6 @@ class BaseSearchModel:
         参数:
             api: 搜索引擎API名称
             error_msg: 错误消息文本
-            is_auto_save: 是否自动保存结果图像
 
         返回:
             Image.Image: 渲染后的错误图像
@@ -390,11 +380,4 @@ class BaseSearchModel:
         margin = 20
         draw.text((margin, margin), f"{api.upper()} 搜索失败", font=title_font, fill='white')
         draw.text((margin, 80), f"错误信息: {error_msg}", font=font, fill='black')
-        if is_auto_save:
-            save_dir = Path("search_results")
-            save_dir.mkdir(exist_ok=True)
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            file_name = f"{api}_error_{timestamp}.jpeg"
-            save_path = save_dir / file_name
-            img.save(save_path, "JPEG", quality=85)
         return img

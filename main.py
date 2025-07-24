@@ -9,7 +9,7 @@ import httpx
 from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.message_components import Image as AstrImage
 from astrbot.api.star import Context, Star, register
-from ImgRevSearcher.model import BaseSearchModel
+from .ImgRevSearcher.model import BaseSearchModel
 
 
 @register("astrbot_plugin_img_rev_seacher", "drdon1234", "以图搜图，找出处", "1.0")

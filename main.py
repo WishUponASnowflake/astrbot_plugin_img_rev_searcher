@@ -99,6 +99,8 @@ class EchoImagePlugin(Star):
                     url_from_text = parts[1]
                 else:
                     engine = parts[1]
+                    if len(parts) > 2 and self._is_image_url(parts[2]):
+                        url_from_text = parts[2]
 
             preloaded_img = None
             if img_urls:
@@ -106,10 +108,30 @@ class EchoImagePlugin(Star):
             elif url_from_text:
                 preloaded_img = await self._download_img(url_from_text)
 
-            if engine:
-                if preloaded_img:
+            if engine or preloaded_img:
+                if engine is None:
+                    self.user_states[user_id] = {
+                        "step": "waiting_engine",
+                        "timestamp": time.time(),
+                        "preloaded_img": preloaded_img
+                    }
+                    workspace_root = Path(__file__).parent
+                    intro_path = workspace_root / "ImgRevSearcher/resource/img/engine_intro.jpg"
+                    with intro_path.open('rb') as f:
+                        intro_content = f.read()
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
+                        temp_file.write(intro_content)
+                        temp_file_path = temp_file.name
+                    yield event.chain_result([AstrImage.fromFileSystem(temp_file_path)])
+                    if os.path.exists(temp_file_path):
+                        os.unlink(temp_file_path)
+                    if preloaded_img:
+                        yield event.plain_result("图片已接收请回复引擎名（如baidu），30秒内有效")
+                    else:
+                        yield event.plain_result("请选择引擎（回复引擎名，如baidu），30秒内有效")
+                elif preloaded_img:
                     if not preloaded_img:
-                        yield event.plain_result("图片下载失败，请稍后重试。")
+                        yield event.plain_result("图片下载失败，请稍后重试")
                         return
                     model = BaseSearchModel()
                     result_img = await model.search_and_draw(api=engine, file=preloaded_img.getvalue(), is_auto_save=False)
@@ -127,27 +149,9 @@ class EchoImagePlugin(Star):
                         "engine": engine,
                         "timestamp": time.time()
                     }
-                    yield event.plain_result(f"使用引擎 {engine}。请在30秒内发送一张图片或图片URL，我会进行搜索")
+                    yield event.plain_result(f"使用引擎 {engine}请在30秒内发送一张图片或图片URL，我会进行搜索")
             else:
-                self.user_states[user_id] = {
-                    "step": "waiting_engine",
-                    "timestamp": time.time(),
-                    "preloaded_img": preloaded_img
-                }
-                workspace_root = Path(__file__).parent
-                intro_path = workspace_root / "ImgRevSearcher/resource/img/engine_intro.jpg"
-                with intro_path.open('rb') as f:
-                    intro_content = f.read()
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
-                    temp_file.write(intro_content)
-                    temp_file_path = temp_file.name
-                yield event.chain_result([AstrImage.fromFileSystem(temp_file_path)])
-                if os.path.exists(temp_file_path):
-                    os.unlink(temp_file_path)
-                if preloaded_img:
-                    yield event.plain_result("图片已接收。请回复引擎名（如baidu），30秒内有效")
-                else:
-                    yield event.plain_result("请选择引擎（回复引擎名，如baidu），30秒内有效")
+                yield event.plain_result("请提供引擎名和图片/URL")
             event.stop_event()
             return
 
@@ -155,7 +159,7 @@ class EchoImagePlugin(Star):
             return
         state = self.user_states[user_id]
         if time.time() - state["timestamp"] > 30:
-            yield event.plain_result("等待超时，操作取消。")
+            yield event.plain_result("等待超时，操作取消")
             del self.user_states[user_id]
             event.stop_event()
             return
@@ -179,9 +183,9 @@ class EchoImagePlugin(Star):
                 else:
                     state["step"] = "waiting_image"
                     state["timestamp"] = time.time()
-                    yield event.plain_result(f"已选择引擎: {message_text}。请在30秒内发送一张图片，我会进行搜索")
+                    yield event.plain_result(f"已选择引擎: {message_text}请在30秒内发送一张图片，我会进行搜索")
             else:
-                yield event.plain_result("请回复有效的引擎名。")
+                yield event.plain_result("请回复有效的引擎名")
             event.stop_event()
             return
 
@@ -197,7 +201,7 @@ class EchoImagePlugin(Star):
             img_buffer = await self._download_img(message_text)
         if img_buffer:
             if not img_buffer:
-                yield event.plain_result("图片下载失败，请稍后重试。")
+                yield event.plain_result("图片下载失败，请稍后重试")
                 del self.user_states[user_id]
                 return
             model = BaseSearchModel()
@@ -211,4 +215,4 @@ class EchoImagePlugin(Star):
             del self.user_states[user_id]
             event.stop_event()
         else:
-            yield event.plain_result("请发送一张图片或图片URL。")
+            yield event.plain_result("请发送一张图片或图片URL")

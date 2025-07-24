@@ -29,20 +29,9 @@ class ImgRevSearcherPlugin(Star):
         self.user_states = {}
         self.cleanup_task = asyncio.create_task(self.cleanup_loop())
         self.available_engines = ["animetrace", "baidu", "bing", "copyseeker", "ehentai", "google", "saucenao", "tineye"]
-        proxies = config.get("proxies", {})
-        default_params = {}
-        if "default_params" in config:
-            params_config = config["default_params"].get("items", {})
-            for engine, engine_config in params_config.items():
-                engine_params = {}
-                for param_name, param_config in engine_config.get("items", {}).items():
-                    engine_params[param_name] = param_config.get("default")
-                default_params[engine] = engine_params
-        default_cookies = {}
-        if "default_cookies" in config:
-            cookies_config = config["default_cookies"].get("items", {})
-            for engine, cookie_config in cookies_config.items():
-                default_cookies[engine] = cookie_config.get("default")
+        proxies = config.get("proxies", "")
+        default_params = config.get("default_params", {})
+        default_cookies = config.get("default_cookies", {})
         self.search_model = BaseSearchModel(
             proxies=proxies,
             timeout=60,
@@ -255,6 +244,55 @@ class ImgRevSearcherPlugin(Star):
         else:
             yield event.plain_result("请选择引擎（回复引擎名，如baidu）并发送图片，30秒内有效")
 
+    def _validate_engine(self, engine_name: str) -> bool:
+        """
+        验证搜索引擎名称是否有效
+
+        参数:
+            engine_name: 引擎名称
+
+        返回:
+            bool: 如果引擎名有效返回True，否则False
+        """
+        return engine_name.lower() in self.available_engines
+        
+    def _parse_search_command(self, message_text: str, img_urls: List[str]):
+        """
+        解析搜索命令，提取引擎名和图片
+
+        参数:
+            message_text: 消息文本
+            img_urls: 消息中的图片URL列表
+
+        返回:
+            tuple: (引擎名或None, 图片数据或None, 是否无效引擎, 潜在的无效引擎名)
+        """
+        parts = message_text.strip().split()
+        engine = None
+        url_from_text = None
+        invalid_engine = False
+        potential_engine = None
+        
+        if len(parts) > 1:
+            if self._is_image_url(parts[1]):
+                url_from_text = parts[1]
+            else:
+                potential_engine = parts[1].lower()
+                if self._validate_engine(potential_engine):
+                    engine = potential_engine
+                else:
+                    invalid_engine = True
+                if len(parts) > 2 and self._is_image_url(parts[2]):
+                    url_from_text = parts[2]
+                    
+        preloaded_img = None
+        if img_urls:
+            preloaded_img = await self._download_img(img_urls[0])
+        elif url_from_text:
+            preloaded_img = await self._download_img(url_from_text)
+            
+        return engine, preloaded_img, invalid_engine, potential_engine
+
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def on_message(self, event: AstrMessageEvent):
         """
@@ -269,24 +307,6 @@ class ImgRevSearcherPlugin(Star):
         user_id = event.get_sender_id()
         message_text = self._get_message_text(event.message_obj)
         img_urls = self._get_img_urls(event.message_obj)
-        if user_id in self.user_states:
-            state = self.user_states[user_id]
-            if state.get("step") == "waiting_text_confirm":
-                if time.time() - state["timestamp"] > 10:
-                    yield event.plain_result("等待超时，操作取消")
-                    del self.user_states[user_id]
-                    event.stop_event()
-                    return
-                if message_text.strip().lower() == "是":
-                    yield event.plain_result(state["result_text"])
-                    del self.user_states[user_id]
-                    event.stop_event()
-                    return
-                else:
-                    yield event.plain_result("操作取消")
-                    del self.user_states[user_id]
-                    event.stop_event()
-                    return
         if message_text.strip().startswith("以图搜图"):
             parts = message_text.strip().split()
             if user_id in self.user_states:
@@ -294,12 +314,13 @@ class ImgRevSearcherPlugin(Star):
             engine = None
             url_from_text = None
             invalid_engine = False
+            potential_engine = None
             if len(parts) > 1:
                 if self._is_image_url(parts[1]):
                     url_from_text = parts[1]
                 else:
                     potential_engine = parts[1].lower()
-                    if potential_engine in self.available_engines:
+                    if self._validate_engine(potential_engine):
                         engine = potential_engine
                     else:
                         invalid_engine = True
@@ -310,7 +331,6 @@ class ImgRevSearcherPlugin(Star):
                 preloaded_img = await self._download_img(img_urls[0])
             elif url_from_text:
                 preloaded_img = await self._download_img(url_from_text)
-
             if invalid_engine:
                 state = {
                     "step": "waiting_both",
@@ -325,7 +345,6 @@ class ImgRevSearcherPlugin(Star):
                     yield result
                 event.stop_event()
                 return
-
             if engine and preloaded_img:
                 if not preloaded_img:
                     yield event.plain_result("图片下载失败，请稍后重试")
@@ -346,6 +365,18 @@ class ImgRevSearcherPlugin(Star):
                     yield result
             event.stop_event()
             return
+        if user_id in self.user_states:
+            state = self.user_states[user_id]
+            if state.get("step") == "waiting_text_confirm":
+                if time.time() - state["timestamp"] > 10:
+                    del self.user_states[user_id]
+                    event.stop_event()
+                    return
+                elif message_text.strip().lower() == "是":
+                    yield event.plain_result(state["result_text"])
+                    del self.user_states[user_id]
+                    event.stop_event()
+                    return
         if user_id not in self.user_states:
             return
         state = self.user_states[user_id]

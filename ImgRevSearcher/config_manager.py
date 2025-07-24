@@ -19,7 +19,7 @@ CONFIG_FILE = Path(__file__).parent / "config.json"
 DEFAULT_CONFIG = {
     "proxies": "http://127.0.0.1:7897",
     "default_params": {
-        "anime_trace": {
+        "animetrace": {
             "model": "full_game_model_kira",
             "is_multi": None,
             "ai_detect": None,
@@ -34,7 +34,7 @@ DEFAULT_CONFIG = {
             "similar": True,
             "exp": False
         },
-        "google_lens": {
+        "google": {
             "search_type": "exact_matches",
             "q": None,
             "hl": "en",
@@ -62,12 +62,12 @@ DEFAULT_CONFIG = {
         },
     },
     "default_cookies": {
-        "anime_trace": None,
+        "animetrace": None,
         "baidu": None,
         "bing": None,
         "copyseeker": None,
         "ehentai": None, # "ipb_member_id=; ipb_pass_hash=; igneous="
-        "google_lens": "AEC=AVh_V2hkwlmGyy-4B-rPZXcc6b0BRLbZMHRB3K3RQudJOfMNniBKHrFvhus; NID=525=fPc2vhi78mV9p7_Zy9EYX2w6POynvO6dA_gh6WgWeRunOgwCshviIrexMQnGq3oi58-t4U5LHLB5sQWN-Er6stXkbKz-UHtzX7MsGcnzjyaeN5COmfji5rfqzb6Omm0g4C0u1ztZgm7h--stbnM8x6zzYrWBMgiVs_2STsIZYd4h5xwZd-Eb97JdQ53QIxsm8bj91sKgjXVIJYuWzGxQ7OYvG0K5jl3ikXeNh3lvl17KsowpkMljgg2y03SsbZPlous; DV=owmVHxhdQYEX0J-HU_sc0eeyR4h5gxk",
+        "google": "AEC=AVh_V2hkwlmGyy-4B-rPZXcc6b0BRLbZMHRB3K3RQudJOfMNniBKHrFvhus; NID=525=fPc2vhi78mV9p7_Zy9EYX2w6POynvO6dA_gh6WgWeRunOgwCshviIrexMQnGq3oi58-t4U5LHLB5sQWN-Er6stXkbKz-UHtzX7MsGcnzjyaeN5COmfji5rfqzb6Omm0g4C0u1ztZgm7h--stbnM8x6zzYrWBMgiVs_2STsIZYd4h5xwZd-Eb97JdQ53QIxsm8bj91sKgjXVIJYuWzGxQ7OYvG0K5jl3ikXeNh3lvl17KsowpkMljgg2y03SsbZPlous; DV=owmVHxhdQYEX0J-HU_sc0eeyR4h5gxk",
         "saucenao": None,
         "tineye": None,
     }

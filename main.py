@@ -308,24 +308,18 @@ class ImgRevSearcherPlugin(Star):
                     sender_id = int(sender_id)
                 except:
                     sender_id = 10000
-                
-                # 创建转发消息节点列表
                 nodes = []
                 for i, part in enumerate(text_parts):
-                    # 使用正确的Node构造方式
                     node = Node(
                         name=sender_name,
                         uin=sender_id,
                         content=[Plain(f"【搜索结果 {i+1}/{len(text_parts)}】\n{part}")]
                     )
                     nodes.append(node)
-                
-                # 使用Nodes对象包装节点列表
                 forward_message = Nodes(nodes)
                 await event.send(event.chain_result([forward_message]))
             else:
                 yield event.plain_result(text_parts[0])
-            
             del self.user_states[user_id]
             event.stop_event()
 

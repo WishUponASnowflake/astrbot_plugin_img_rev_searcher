@@ -1,43 +1,106 @@
-# 聚合图片反搜项目
+# 适配 AstrBot 的图片反搜插件
 
-> **核心代码基于**：[kitUIN/PicImageSearch](https://github.com/kitUIN/PicImageSearch)
+> ⚡ **核心代码基于**：[kitUIN/PicImageSearch](https://github.com/kitUIN/PicImageSearch)
 
-## 支持的搜索引擎
+## 🛠 安装方法
 
-| 引擎         | 网址 | 二次元图片专用 | 中国大陆直连 |
-|------------|------|---------|------------------|
-| animetrace      | [https://www.animetrace.com/](https://www.animetrace.com/) | ✅       | ✅ |
-| baidu      | [https://graph.baidu.com/](https://graph.baidu.com/) | ❌       | ✅ |
-| bing       | [https://www.bing.com/images/search](https://www.bing.com/images/search) | ❌       | ❌ |
-| copyseeker | [https://copyseeker.net/](https://copyseeker.net/) | ❌       | ❌ |
-| ehentai    | [https://e-hentai.org/](https://e-hentai.org/) | ✅       | ❌ |
-| google     | [https://lens.google.com/](https://lens.google.com/) | ❌       | ❌ |
-| saucenao   | [https://saucenao.com/](https://saucenao.com/) | ✅       | ✅ |
-| tineye     | [https://tineye.com/search/](https://tineye.com/search/) | ❌       | ❌ |
+### 1. 通过插件市场安装
 
-## 使用指南
+- 打开 **AstrBot WebUI** → **插件市场** → 右上角 **Search**
+- 搜索与本项目相关的关键词，找到插件后点击安装
+- 推荐直接用唯一标识符搜索：  
+  ```
+  astrbot_plugin_img_rev_seacher
+  ```
 
-1. **配置代理**  
-   编辑根目录的 `config.json` 中的 `proxies` 参数
+### 2. 通过 Github 仓库链接安装
 
-2. **查看示例模板**  
-   参考 `test_templates` 目录下的代码模板，可根据需求选择合适的引擎调用方式
+- 打开 **AstrBot WebUI** → **插件管理** → **+ 安装**
+- 在出现的输入框内粘贴以下仓库地址并点击安装：
+  ```
+  https://github.com/drdon1234/astrbot_plugin_img_rev_seacher
+  ```
 
-## 重要说明
+## 🚀 使用说明
 
-### Google Lens 引擎的 Cookie 强制要求
+| 指令类型 | 格式                | 说明                    |
+|:----:|:------------------|:-----------------------|
+| 指令头  | `以图搜图`            | 启动图片反搜流程        |
+|  参数  | `引擎名`，`图片文件/图片链接` | 两个参数都必填，顺序不限 |
 
-请按以下步骤获取无痕模式下有效的 Google Cookie：
+### 指令帮助
 
-1. 打开浏览器无痕窗口  
-2. 按 `F12` 打开开发者工具，切换到"网络(Network)"标签，过滤"Fetch/XHR"  
-3. 访问 [https://image.google.com/](https://image.google.com/)  并上传任意图片进行搜索
-4. 找到以 `search?vsrid=` 开头的请求，查看请求头中的 `Cookie` 字段  
-5. 复制完整的 Cookie 内容，替换到 `config.json` 中 `default_cookies` 的 `google_lens` 项
+#### 方式一：根据提示分步发送
+1. 发送 `以图搜图`
+2. 发送 `<引擎名>` 和 / 或 `<图片文件/图片链接>`
+3. 若有缺漏，补充缺少的参数
 
-**注意：**  
-- 无痕模式cookie格式一般为 `AEC= ; NID= ; DV=`，有效期限约6个月
-- 登录状态cookie有效期极短，不建议使用
+#### 方式二：先发送部分参数再补齐
+- 发送 `以图搜图 <图片文件/图片链接>`，再发送 `<引擎名>`
+- 发送 `以图搜图 <引擎名>`，再发送 `<图片文件/图片链接>`
+
+#### 方式三：一次性发送全部参数
+- 发送 `以图搜图 <引擎名> <图片文件/图片链接>`
+- 发送 `以图搜图 <图片文件/图片链接> <引擎名>`
+
+#### 方式四：引用历史消息再补齐
+- 引用一张图片并发送 `以图搜图 <引擎名>`
+
+### 支持的搜索引擎
+
+| 引擎        | 网址                                                        | 二次元专用 | 中国大陆直连 |
+|:------------|:------------------------------------------------------------|:----------:|:-------------:|
+| animetrace  | [animetrace.com](https://www.animetrace.com/)               | ✅         | ✅            |
+| baidu       | [graph.baidu.com](https://graph.baidu.com/)                  | ❌         | ✅            |
+| bing        | [bing.com/images/search](https://www.bing.com/images/search)| ❌         | ❌            |
+| copyseeker  | [copyseeker.net](https://copyseeker.net/)                   | ❌         | ❌            |
+| ehentai     | [e-hentai.org](https://e-hentai.org/)                        | ✅         | ❌            |
+| google      | [lens.google.com](https://lens.google.com/)                  | ❌         | ❌            |
+| saucenao    | [saucenao.com](https://saucenao.com/)                        | ✅         | ✅            |
+| tineye      | [tineye.com/search/](https://tineye.com/search/)             | ❌         | ❌            |
+
+## ⚠️ 配置文件说明
+
+**在使用前请核对并根据需要修改配置文件**：
+
+- 打开 **AstrBot WebUI → 插件管理 → 找到本插件 → 操作 → 插件配置**
+
+**Google Lens 引擎的 Cookie 要求**：
+
+为保证 Google Lens 引擎可用，请参照下述步骤获取有效 Cookie：
+
+1. 用浏览器打开无痕窗口
+2. 按 `F12` 打开开发者工具，切到“网络(Network)”标签，过滤“Fetch/XHR”
+3. 访问 [image.google.com](https://image.google.com/) 并上传任意图片搜索
+4. 找到以 `search?vsrid=` 开头的请求，查看请求头的 `Cookie` 字段
+5. 复制完整 Cookie 内容，粘贴至配置文件的 `default_cookies.google` 项
+
+> **注意：**
+> - 无痕 cookie 格式一般为 `AEC= ; NID= ; DV=`，有效期大约6个月
+> - 登录状态下 Cookie 有效期很短，不建议使用
+
+## 📦 依赖库安装（重要）
+
+请先安装以下依赖库：
+
+- httpx
+- Pillow
+- pyquery
+- typing_extensions
+
+在终端执行：
+
+```
+pip install -r requirements.txt
+```
+或逐个安装：
+
+```
+pip install 
+```
+*将 `` 替换为具体库名称*
+
+---
 
 # API 参数说明文档
 

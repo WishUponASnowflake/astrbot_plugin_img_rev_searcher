@@ -10,6 +10,7 @@ from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.message_components import Image as AstrImage
 from astrbot.api.star import Context, Star, register
 from .ImgRevSearcher.model import BaseSearchModel
+from pathlib import Path
 
 
 @register("astrbot_plugin_img_rev_seacher", "drdon1234", "以图搜图，找出处", "1.0")
@@ -77,53 +78,63 @@ class EchoImagePlugin(Star):
         imgs = await asyncio.gather(*[self._download_img(url) for url in img_urls])
         return [img for img in imgs if img is not None]
 
-    @filter.command("以图搜图")
-    async def start_search(self, event: AstrMessageEvent):
+    @filter.event_message_type(filter.EventMessageType.ALL)
+    async def on_message(self, event: AstrMessageEvent):
         user_id = event.get_sender_id()
         message_text = self._get_message_text(event.message_obj)
-        parts = message_text.strip().split()
         img_urls = self._get_img_urls(event.message_obj)
         preloaded_img = None
         if img_urls:
             preloaded_img = await self._download_img(img_urls[0])
 
-        if len(parts) > 1:
-            engine = parts[1]
-            if preloaded_img:
-                model = BaseSearchModel()
-                result_img = await model.search_and_draw(api=engine, file=preloaded_img.getvalue(), is_auto_save=False)
+        if message_text.strip().startswith("以图搜图"):
+            parts = message_text.strip().split()
+            if user_id in self.user_states:
+                return  # Avoid re-initializing if already in state
+
+            if len(parts) > 1:
+                engine = parts[1]
+                if preloaded_img:
+                    model = BaseSearchModel()
+                    result_img = await model.search_and_draw(api=engine, file=preloaded_img.getvalue(), is_auto_save=False)
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
+                        result_img.save(temp_file, format="JPEG", quality=85)
+                        temp_file_path = temp_file.name
+                    yield event.chain_result([AstrImage.fromFileSystem(temp_file_path)])
+                    if os.path.exists(temp_file_path):
+                        os.unlink(temp_file_path)
+                    event.stop_event()
+                    return
+                else:
+                    self.user_states[user_id] = {
+                        "step": "waiting_image",
+                        "engine": engine,
+                        "timestamp": time.time()
+                    }
+                    yield event.plain_result(f"使用引擎 {engine}。请在30秒内发送一张图片，我会进行搜索")
+            else:
+                self.user_states[user_id] = {
+                    "step": "waiting_engine",
+                    "timestamp": time.time(),
+                    "preloaded_img": preloaded_img
+                }
+                workspace_root = Path(__file__).parent
+                intro_path = workspace_root / "ImgRevSearcher" / "resource" / "img" / "engine_intro.jpg"
+                with intro_path.open('rb') as f:
+                    intro_content = f.read()
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
-                    result_img.save(temp_file, format="JPEG", quality=85)
+                    temp_file.write(intro_content)
                     temp_file_path = temp_file.name
                 yield event.chain_result([AstrImage.fromFileSystem(temp_file_path)])
                 if os.path.exists(temp_file_path):
                     os.unlink(temp_file_path)
-                event.stop_event()
-                return
-            else:
-                self.user_states[user_id] = {
-                    "step": "waiting_image",
-                    "engine": engine,
-                    "timestamp": time.time()
-                }
-                yield event.plain_result(f"使用引擎 {engine}。请在30秒内发送一张图片，我会进行搜索")
-        else:
-            self.user_states[user_id] = {
-                "step": "waiting_engine",
-                "timestamp": time.time(),
-                "preloaded_img": preloaded_img
-            }
-            intro_path = "ImgRevSearcher/resource/img/engine_intro.jpg"
-            yield event.chain_result([AstrImage.fromFileSystem(intro_path)])
-            if preloaded_img:
-                yield event.plain_result("图片已接收。请回复引擎名（如baidu），30秒内有效")
-            else:
-                yield event.plain_result("请选择引擎（回复引擎名，如baidu），30秒内有效")
-        event.stop_event()
+                if preloaded_img:
+                    yield event.plain_result("图片已接收。请回复引擎名（如baidu），30秒内有效")
+                else:
+                    yield event.plain_result("请选择引擎（回复引擎名，如baidu），30秒内有效")
+            event.stop_event()
+            return
 
-    @filter.event_message_type(filter.EventMessageType.ALL)
-    async def on_message(self, event: AstrMessageEvent):
-        user_id = event.get_sender_id()
         if user_id not in self.user_states:
             return
         state = self.user_states[user_id]
@@ -134,7 +145,6 @@ class EchoImagePlugin(Star):
             return
 
         if state["step"] == "waiting_engine":
-            message_text = self._get_message_text(event.message_obj)
             if message_text:
                 state["engine"] = message_text
                 if state.get("preloaded_img"):

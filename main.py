@@ -239,6 +239,242 @@ class ImgRevSearcherPlugin(Star):
         else:
             yield event.plain_result("请选择引擎（回复引擎名，如baidu）并发送图片，30秒内有效")
 
+    async def _handle_timeout(self, event: AstrMessageEvent, user_id: str):
+        """
+        处理用户状态超时
+
+        参数:
+            event: 消息事件
+            user_id: 用户ID
+        
+        产生:
+            超时提示消息
+        """
+        yield event.plain_result("等待超时，操作取消")
+        if user_id in self.user_states:
+            del self.user_states[user_id]
+        event.stop_event()
+
+    async def _handle_waiting_text_confirm(self, event: AstrMessageEvent, state: dict, user_id: str):
+        """
+        处理等待用户确认是否需要文本结果的状态
+
+        参数:
+            event: 消息事件
+            state: 用户状态
+            user_id: 用户ID
+
+        产生:
+            处理结果消息
+        """
+        message_text = self._get_message_text(event.message_obj)
+        if time.time() - state["timestamp"] > 10:
+            del self.user_states[user_id]
+            event.stop_event()
+            return
+        elif message_text.strip().lower() == "是":
+            yield event.plain_result(state["result_text"])
+            del self.user_states[user_id]
+            event.stop_event()
+
+    async def _handle_waiting_engine(self, event: AstrMessageEvent, state: dict, user_id: str):
+        """
+        处理等待用户提供引擎名的状态
+
+        参数:
+            event: 消息事件
+            state: 用户状态
+            user_id: 用户ID
+
+        产生:
+            处理结果消息
+        """
+        message_text = self._get_message_text(event.message_obj).lower()
+        if not message_text:
+            yield event.plain_result("请回复有效的引擎名")
+            state["timestamp"] = time.time()
+            event.stop_event()
+            return
+        if message_text in self.available_engines:
+            state["engine"] = message_text
+            if state.get("preloaded_img"):
+                async for result in self._perform_search(event, state["engine"], state["preloaded_img"]):
+                    yield result
+                del self.user_states[user_id]
+            else:
+                state["step"] = "waiting_image"
+                state["timestamp"] = time.time()
+                yield event.plain_result(f"已选择引擎: {message_text}，请在30秒内发送一张图片，我会进行搜索")
+        else:
+            state.setdefault("invalid_attempts", 0)
+            state["invalid_attempts"] += 1
+            if state["invalid_attempts"] >= 2:
+                yield event.plain_result("连续两次输入错误的引擎名，已取消操作")
+                del self.user_states[user_id]
+            else:
+                yield event.plain_result(f"引擎 '{message_text}' 不存在，请回复有效的引擎名")
+                state["timestamp"] = time.time()
+                async for result in self._send_engine_prompt(event, state):
+                    yield result
+        event.stop_event()
+
+    async def _handle_waiting_both(self, event: AstrMessageEvent, state: dict, user_id: str):
+        """
+        处理等待用户同时提供引擎名和图片的状态
+
+        参数:
+            event: 消息事件
+            state: 用户状态
+            user_id: 用户ID
+
+        产生:
+            处理结果消息
+        """
+        updated = False
+        message_text = self._get_message_text(event.message_obj).lower()
+        img_urls = self._get_img_urls(event.message_obj)
+        if message_text and message_text in self.available_engines and not state.get('engine'):
+            state["engine"] = message_text
+            updated = True
+        img_buffer = None
+        if img_urls:
+            img_buffer = await self._download_img(img_urls[0])
+        elif self._is_image_url(message_text):
+            img_buffer = await self._download_img(message_text)
+            
+        if img_buffer and not state.get('preloaded_img'):
+            state["preloaded_img"] = img_buffer
+            updated = True
+        if state.get("engine") and state.get("preloaded_img"):
+            async for result in self._perform_search(event, state["engine"], state["preloaded_img"]):
+                yield result
+            del self.user_states[user_id]
+            event.stop_event()
+            return
+        if updated:
+            state["timestamp"] = time.time()
+            async for result in self._send_engine_prompt(event, state):
+                yield result
+        else:
+            state["timestamp"] = time.time()
+            is_invalid_engine_attempt = message_text and not self._is_image_url(message_text) and not state.get('engine')
+            
+            if is_invalid_engine_attempt:
+                state.setdefault("invalid_attempts", 0)
+                state["invalid_attempts"] += 1
+                if state["invalid_attempts"] >= 2:
+                    yield event.plain_result("连续两次输入错误的引擎名，已取消操作")
+                    del self.user_states[user_id]
+                else:
+                    yield event.plain_result(f"引擎 '{message_text}' 不存在，请回复有效的引擎名")
+                    async for result in self._send_engine_prompt(event, state):
+                        yield result
+            else:
+                if not state.get('engine') and not state.get('preloaded_img'):
+                    yield event.plain_result("请提供引擎名和图片")
+                elif not state.get('engine'):
+                    yield event.plain_result("请提供引擎名")
+                elif not state.get('preloaded_img'):
+                    yield event.plain_result("请提供图片")
+                    
+        event.stop_event()
+
+    async def _handle_waiting_image(self, event: AstrMessageEvent, state: dict, user_id: str):
+        """
+        处理等待用户提供图片的状态
+
+        参数:
+            event: 消息事件
+            state: 用户状态
+            user_id: 用户ID
+
+        产生:
+            处理结果消息
+        """
+        img_urls = self._get_img_urls(event.message_obj)
+        message_text = self._get_message_text(event.message_obj)
+        img_buffer = None
+        if img_urls:
+            img_buffer = await self._download_img(img_urls[0])
+        elif self._is_image_url(message_text):
+            img_buffer = await self._download_img(message_text)
+        if img_buffer:
+            if not img_buffer:  # 图片下载失败
+                yield event.plain_result("图片下载失败，请稍后重试")
+                del self.user_states[user_id]
+                return
+            async for result in self._perform_search(event, state["engine"], img_buffer):
+                yield result
+            del self.user_states[user_id]
+            event.stop_event()
+        else:
+            yield event.plain_result("请发送一张图片或图片链接")
+
+    async def _handle_initial_search_command(self, event: AstrMessageEvent, user_id: str):
+        """
+        处理初始搜索命令
+
+        参数:
+            event: 消息事件
+            user_id: 用户ID
+
+        产生:
+            处理结果消息
+        """
+        message_text = self._get_message_text(event.message_obj)
+        img_urls = self._get_img_urls(event.message_obj)
+        parts = message_text.strip().split()
+        if user_id in self.user_states:
+            del self.user_states[user_id]
+        engine = None
+        url_from_text = None
+        invalid_engine = False
+        if len(parts) > 1:
+            if self._is_image_url(parts[1]):
+                url_from_text = parts[1]
+            else:
+                potential_engine = parts[1].lower()
+                if potential_engine in self.available_engines:
+                    engine = potential_engine
+                else:
+                    invalid_engine = True
+                if len(parts) > 2 and self._is_image_url(parts[2]):
+                    url_from_text = parts[2]
+        preloaded_img = None
+        if img_urls:
+            preloaded_img = await self._download_img(img_urls[0])
+        elif url_from_text:
+            preloaded_img = await self._download_img(url_from_text)
+        if invalid_engine:
+            state = {
+                "step": "waiting_both",
+                "timestamp": time.time(),
+                "preloaded_img": preloaded_img,
+                "engine": None,
+                "invalid_attempts": 1
+            }
+            self.user_states[user_id] = state
+            yield event.plain_result(f"引擎 '{potential_engine}' 不存在，请提供有效的引擎名")
+            async for result in self._send_engine_prompt(event, state):
+                yield result
+            event.stop_event()
+            return
+        if engine and preloaded_img:
+            async for result in self._perform_search(event, engine, preloaded_img):
+                yield result
+            event.stop_event()
+            return
+        state = {
+            "step": "waiting_both",
+            "timestamp": time.time(),
+            "preloaded_img": preloaded_img,
+            "engine": engine
+        }
+        self.user_states[user_id] = state
+        async for result in self._send_engine_prompt(event, state):
+            yield result
+        event.stop_event()
+
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def on_message(self, event: AstrMessageEvent):
         """
@@ -252,185 +488,27 @@ class ImgRevSearcherPlugin(Star):
         """
         user_id = event.get_sender_id()
         message_text = self._get_message_text(event.message_obj)
-        img_urls = self._get_img_urls(event.message_obj)
         if message_text.strip().startswith("以图搜图"):
-            parts = message_text.strip().split()
-            if user_id in self.user_states:
-                del self.user_states[user_id]
-            engine = None
-            url_from_text = None
-            invalid_engine = False
-            if len(parts) > 1:
-                if self._is_image_url(parts[1]):
-                    url_from_text = parts[1]
-                else:
-                    potential_engine = parts[1].lower()
-                    if potential_engine in self.available_engines:
-                        engine = potential_engine
-                    else:
-                        invalid_engine = True
-                    if len(parts) > 2 and self._is_image_url(parts[2]):
-                        url_from_text = parts[2]
-            preloaded_img = None
-            if img_urls:
-                preloaded_img = await self._download_img(img_urls[0])
-            elif url_from_text:
-                preloaded_img = await self._download_img(url_from_text)
-            if invalid_engine:
-                state = {
-                    "step": "waiting_both",
-                    "timestamp": time.time(),
-                    "preloaded_img": preloaded_img,
-                    "engine": None,
-                    "invalid_attempts": 1
-                }
-                self.user_states[user_id] = state
-                yield event.plain_result(f"引擎 '{potential_engine}' 不存在，请提供有效的引擎名")
-                async for result in self._send_engine_prompt(event, state):
-                    yield result
-                event.stop_event()
-                return
-            if engine and preloaded_img:
-                if not preloaded_img:
-                    yield event.plain_result("图片下载失败，请稍后重试")
-                    return
-                async for result in self._perform_search(event, engine, preloaded_img):
-                    yield result
-                event.stop_event()
-                return
-            else:
-                state = {
-                    "step": "waiting_both",
-                    "timestamp": time.time(),
-                    "preloaded_img": preloaded_img,
-                    "engine": engine
-                }
-                self.user_states[user_id] = state
-                async for result in self._send_engine_prompt(event, state):
-                    yield result
-            event.stop_event()
+            async for result in self._handle_initial_search_command(event, user_id):
+                yield result
             return
-        if user_id in self.user_states:
-            state = self.user_states[user_id]
-            if state.get("step") == "waiting_text_confirm":
-                if time.time() - state["timestamp"] > 10:
-                    del self.user_states[user_id]
-                    event.stop_event()
-                    return
-                elif message_text.strip().lower() == "是":
-                    yield event.plain_result(state["result_text"])
-                    del self.user_states[user_id]
-                    event.stop_event()
-                    return
         if user_id not in self.user_states:
             return
         state = self.user_states[user_id]
+        if state.get("step") == "waiting_text_confirm":
+            async for result in self._handle_waiting_text_confirm(event, state, user_id):
+                yield result
+            return
         if time.time() - state["timestamp"] > 30:
-            yield event.plain_result("等待超时，操作取消")
-            del self.user_states[user_id]
-            event.stop_event()
+            async for result in self._handle_timeout(event, user_id):
+                yield result
             return
         if state["step"] == "waiting_engine":
-            message_text = self._get_message_text(event.message_obj).lower()
-            if message_text:
-                if message_text in self.available_engines:
-                    state["engine"] = message_text
-                    if state.get("preloaded_img"):
-                        async for result in self._perform_search(event, state["engine"], state["preloaded_img"]):
-                            yield result
-                        del self.user_states[user_id]
-                        event.stop_event()
-                        return
-                    else:
-                        state["step"] = "waiting_image"
-                        state["timestamp"] = time.time()
-                        yield event.plain_result(f"已选择引擎: {message_text}，请在30秒内发送一张图片，我会进行搜索")
-                else:
-                    state.setdefault("invalid_attempts", 0)
-                    state["invalid_attempts"] += 1
-                    if state["invalid_attempts"] >= 2:
-                        yield event.plain_result("连续两次输入错误的引擎名，已取消操作")
-                        del self.user_states[user_id]
-                        event.stop_event()
-                        return
-                    else:
-                        yield event.plain_result(f"引擎 '{message_text}' 不存在，请回复有效的引擎名")
-                        state["timestamp"] = time.time()
-                        async for result in self._send_engine_prompt(event, state):
-                            yield result
-            else:
-                yield event.plain_result("请回复有效的引擎名")
-                state["timestamp"] = time.time()
-            event.stop_event()
-            return
-        if state["step"] == "waiting_both":
-            updated = False
-            message_text = self._get_message_text(event.message_obj).lower()
-            img_urls = self._get_img_urls(event.message_obj)
-            if message_text and message_text in self.available_engines and not state.get('engine'):
-                state["engine"] = message_text
-                updated = True
-            img_buffer = None
-            if img_urls:
-                img_buffer = await self._download_img(img_urls[0])
-            elif self._is_image_url(message_text):
-                img_buffer = await self._download_img(message_text)
-            if img_buffer and not state.get('preloaded_img'):
-                state["preloaded_img"] = img_buffer
-                updated = True
-            if state.get("engine") and state.get("preloaded_img"):
-                async for result in self._perform_search(event, state["engine"], state["preloaded_img"]):
-                    yield result
-                del self.user_states[user_id]
-                event.stop_event()
-                return
-            if updated:
-                state["timestamp"] = time.time()
-                async for result in self._send_engine_prompt(event, state):
-                    yield result
-            else:
-                state["timestamp"] = time.time()
-                is_invalid_engine_attempt = message_text and not self._is_image_url(message_text) and not state.get('engine')
-                if is_invalid_engine_attempt:
-                    state.setdefault("invalid_attempts", 0)
-                    state["invalid_attempts"] += 1
-                    if state["invalid_attempts"] >= 2:
-                        yield event.plain_result("连续两次输入错误的引擎名，已取消操作")
-                        del self.user_states[user_id]
-                        event.stop_event()
-                        return
-                    else:
-                        yield event.plain_result(f"引擎 '{message_text}' 不存在，请回复有效的引擎名")
-                        async for result in self._send_engine_prompt(event, state):
-                            yield result
-                        event.stop_event()
-                        return
-                else:
-                    if not state.get('engine') and not state.get('preloaded_img'):
-                        yield event.plain_result("请提供引擎名和图片")
-                    elif not state.get('engine'):
-                        yield event.plain_result("请提供引擎名")
-                    elif not state.get('preloaded_img'):
-                        yield event.plain_result("请提供图片")
-            event.stop_event()
-            return
-        if state["step"] != "waiting_image":
-            return
-        img_urls = self._get_img_urls(event.message_obj)
-        message_text = self._get_message_text(event.message_obj)
-        img_buffer = None
-        if img_urls:
-            img_buffer = await self._download_img(img_urls[0])
-        elif self._is_image_url(message_text):
-            img_buffer = await self._download_img(message_text)
-        if img_buffer:
-            if not img_buffer:
-                yield event.plain_result("图片下载失败，请稍后重试")
-                del self.user_states[user_id]
-                return
-            async for result in self._perform_search(event, state["engine"], img_buffer):
+            async for result in self._handle_waiting_engine(event, state, user_id):
                 yield result
-            del self.user_states[user_id]
-            event.stop_event()
-        else:
-            yield event.plain_result("请发送一张图片或图片链接")
+        elif state["step"] == "waiting_both":
+            async for result in self._handle_waiting_both(event, state, user_id):
+                yield result
+        elif state["step"] == "waiting_image":
+            async for result in self._handle_waiting_image(event, state, user_id):
+                yield result

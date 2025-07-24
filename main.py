@@ -39,6 +39,43 @@ class ImgRevSearcherPlugin(Star):
             default_cookies=default_cookies
         )
 
+    def _split_text_by_length(self, text: str, max_length: int = 4000) -> List[str]:
+        """
+        将文本按最大长度分割，尽量在50个连续短横线处截断
+
+        参数:
+            text: 要分割的文本
+            max_length: 每段最大长度
+
+        返回:
+            List[str]: 分割后的文本片段列表
+        """
+        if len(text) <= max_length:
+            return [text]
+        
+        # 定义分隔符：50个连续短横线
+        separator = "-" * 50
+        
+        result = []
+        while text:
+            if len(text) <= max_length:
+                result.append(text)
+                break
+            
+            # 寻找距离max_length最近的分隔符位置
+            cut_index = max_length
+            separator_index = text.rfind(separator, 0, max_length)
+            
+            if separator_index != -1 and separator_index > max_length // 2:  # 确保分隔符不是在文本开头
+                # 如果找到分隔符，在分隔符后截断
+                cut_index = separator_index + len(separator)
+            
+            # 截取文本
+            result.append(text[:cut_index])
+            text = text[cut_index:]
+        
+        return result
+
     async def cleanup_loop(self):
         """
         清理循环任务
@@ -273,7 +310,11 @@ class ImgRevSearcherPlugin(Star):
             event.stop_event()
             return
         elif message_text.strip().lower() == "是":
-            yield event.plain_result(state["result_text"])
+            # 分割长文本
+            text_parts = self._split_text_by_length(state["result_text"])
+            # 依次发送文本片段
+            for part in text_parts:
+                yield event.plain_result(part)
             del self.user_states[user_id]
             event.stop_event()
 

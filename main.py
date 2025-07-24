@@ -244,55 +244,6 @@ class ImgRevSearcherPlugin(Star):
         else:
             yield event.plain_result("请选择引擎（回复引擎名，如baidu）并发送图片，30秒内有效")
 
-    def _validate_engine(self, engine_name: str) -> bool:
-        """
-        验证搜索引擎名称是否有效
-
-        参数:
-            engine_name: 引擎名称
-
-        返回:
-            bool: 如果引擎名有效返回True，否则False
-        """
-        return engine_name.lower() in self.available_engines
-        
-    def _parse_search_command(self, message_text: str, img_urls: List[str]):
-        """
-        解析搜索命令，提取引擎名和图片
-
-        参数:
-            message_text: 消息文本
-            img_urls: 消息中的图片URL列表
-
-        返回:
-            tuple: (引擎名或None, 图片数据或None, 是否无效引擎, 潜在的无效引擎名)
-        """
-        parts = message_text.strip().split()
-        engine = None
-        url_from_text = None
-        invalid_engine = False
-        potential_engine = None
-        
-        if len(parts) > 1:
-            if self._is_image_url(parts[1]):
-                url_from_text = parts[1]
-            else:
-                potential_engine = parts[1].lower()
-                if self._validate_engine(potential_engine):
-                    engine = potential_engine
-                else:
-                    invalid_engine = True
-                if len(parts) > 2 and self._is_image_url(parts[2]):
-                    url_from_text = parts[2]
-                    
-        preloaded_img = None
-        if img_urls:
-            preloaded_img = await self._download_img(img_urls[0])
-        elif url_from_text:
-            preloaded_img = await self._download_img(url_from_text)
-            
-        return engine, preloaded_img, invalid_engine, potential_engine
-
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def on_message(self, event: AstrMessageEvent):
         """
@@ -314,13 +265,12 @@ class ImgRevSearcherPlugin(Star):
             engine = None
             url_from_text = None
             invalid_engine = False
-            potential_engine = None
             if len(parts) > 1:
                 if self._is_image_url(parts[1]):
                     url_from_text = parts[1]
                 else:
                     potential_engine = parts[1].lower()
-                    if self._validate_engine(potential_engine):
+                    if potential_engine in self.available_engines:
                         engine = potential_engine
                     else:
                         invalid_engine = True

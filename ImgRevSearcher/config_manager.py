@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from utils.api_request import AnimeTrace, BaiDu, Bing, Copyseeker, EHentai, GoogleLens, SauceNAO, Tineye
+from .utils.api_request import AnimeTrace, BaiDu, Bing, Copyseeker, EHentai, GoogleLens, SauceNAO, Tineye
 
 
 ENGINE_MAP = {

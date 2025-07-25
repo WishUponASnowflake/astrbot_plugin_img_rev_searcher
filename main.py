@@ -15,7 +15,7 @@ from .ImgRevSearcher.model import BaseSearchModel
 from PIL import ImageDraw, ImageFont
 
 
-@register("astrbot_plugin_img_rev_seacher", "drdon1234", "以图搜图，找出处", "1.0")
+@register("astrbot_plugin_img_rev_seacher", "drdon1234", "以图搜图，找出处", "2.1")
 class ImgRevSearcherPlugin(Star):
     def __init__(self, context: Context, config: dict):
         """

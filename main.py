@@ -306,26 +306,23 @@ class ImgRevSearcherPlugin(Star):
             return
         elif message_text.strip().lower() == "是":
             text_parts = self._split_text_by_length(state["result_text"])
-            if len(text_parts) > 1:
-                sender_name = "图片搜索bot"
-                sender_id = event.get_self_id()
+            sender_name = "图片搜索bot"
+            sender_id = event.get_self_id()
+            try:
+                sender_id = int(sender_id)
+            except:
+                sender_id = 10000
+            for i, part in enumerate(text_parts):
+                node = Node(
+                    name=sender_name,
+                    uin=sender_id,
+                    content=[Plain(f"【搜索结果 {i+1}/{len(text_parts)}】\n{part}")]
+                )
+                nodes = Nodes([node])
                 try:
-                    sender_id = int(sender_id)
-                except:
-                    sender_id = 10000
-                for i, part in enumerate(text_parts):
-                    node = Node(
-                        name=sender_name,
-                        uin=sender_id,
-                        content=[Plain(f"【搜索结果 {i+1}/{len(text_parts)}】\n{part}")]
-                    )
-                    nodes = Nodes([node])
-                    try:
-                        await event.send(event.chain_result([nodes]))
-                    except Exception as e:
-                        yield event.plain_result(f"发送搜索结果失败: {str(e)}")
-            else:
-                yield event.plain_result(text_parts[0])
+                    await event.send(event.chain_result([nodes]))
+                except Exception as e:
+                    yield event.plain_result(f"发送搜索结果失败: {str(e)}")
             del self.user_states[user_id]
             event.stop_event()
 

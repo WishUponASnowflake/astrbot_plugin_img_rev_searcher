@@ -60,7 +60,7 @@ class ImgRevSearcherPlugin(Star):
                 break
             cut_index = max_length
             separator_index = text.rfind(separator, 0, max_length)
-            if separator_index != -1 and separator_index > max_length // 2:  # 确保分隔符不是在文本开头
+            if separator_index != -1 and separator_index > max_length // 2:
                 cut_index = separator_index + len(separator)
             result.append(text[:cut_index])
             text = text[cut_index:]
@@ -320,7 +320,10 @@ class ImgRevSearcherPlugin(Star):
                         content=[Plain(f"【搜索结果 {i+1}/{len(text_parts)}】\n{part}")]
                     )
                     nodes = Nodes([node])
-                    await event.send(event.chain_result([nodes]))
+                    try:
+                        await event.send(event.chain_result([nodes]))
+                    except Exception as e:
+                        yield event.plain_result(f"发送搜索结果失败: {str(e)}")
             else:
                 yield event.plain_result(text_parts[0])
             del self.user_states[user_id]
@@ -349,7 +352,6 @@ class ImgRevSearcherPlugin(Star):
             if state.get("preloaded_img"):
                 async for result in self._perform_search(event, state["engine"], state["preloaded_img"]):
                     yield result
-                del self.user_states[user_id]
             else:
                 state["step"] = "waiting_image"
                 state["timestamp"] = time.time()
@@ -397,7 +399,6 @@ class ImgRevSearcherPlugin(Star):
         if state.get("engine") and state.get("preloaded_img"):
             async for result in self._perform_search(event, state["engine"], state["preloaded_img"]):
                 yield result
-            del self.user_states[user_id]
             event.stop_event()
             return
         if updated:
@@ -454,7 +455,6 @@ class ImgRevSearcherPlugin(Star):
                 return
             async for result in self._perform_search(event, state["engine"], img_buffer):
                 yield result
-            del self.user_states[user_id]
             event.stop_event()
         else:
             yield event.plain_result("请发送一张图片或图片链接")

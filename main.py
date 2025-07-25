@@ -406,7 +406,7 @@ class ImgRevSearcherPlugin(Star):
             提示消息结果
         """
         if not self.available_engines:
-            yield event.plain_result("当前没有可用的搜索引擎，请在配置中启用至少一个引擎")
+            yield event.plain_result("当前没有可用的搜索引擎，请联系管理员在配置中启用至少一个引擎")
             return
         example_engine = self.available_engines[0] if self.available_engines else "none"
         if not state.get('engine'):
@@ -509,7 +509,7 @@ class ImgRevSearcherPlugin(Star):
             all_engines = ["animetrace", "baidu", "bing", "copyseeker", "ehentai", "google", "saucenao", "tineye"]
             if message_text in all_engines and message_text not in self.available_engines:
                 yield event.plain_result(
-                    f"引擎 '{message_text}' 已被禁用，请在配置中启用或选择其他引擎（如{example_engine}）")
+                    f"引擎 '{message_text}' 已被禁用，请联系管理员在配置中启用或选择其他引擎（如{example_engine}）")
                 state["timestamp"] = time.time()
                 async for result in self._send_engine_prompt(event, state):
                     yield result
@@ -573,7 +573,7 @@ class ImgRevSearcherPlugin(Star):
                 all_engines = ["animetrace", "baidu", "bing", "copyseeker", "ehentai", "google", "saucenao", "tineye"]
                 if message_text in all_engines and message_text not in self.available_engines:
                     yield event.plain_result(
-                        f"引擎 '{message_text}' 已被禁用，请在配置中启用或选择其他引擎（如{example_engine}）")
+                        f"引擎 '{message_text}' 已被禁用，请联系管理员在配置中启用或选择其他引擎（如{example_engine}）")
                     async for result in self._send_engine_prompt(event, state):
                         yield result
                 else:
@@ -637,7 +637,7 @@ class ImgRevSearcherPlugin(Star):
             处理结果消息
         """
         if not self.available_engines:
-            yield event.plain_result("当前没有可用的搜索引擎，请在配置中启用至少一个引擎")
+            yield event.plain_result("当前没有可用的搜索引擎，请联系管理员在配置中启用至少一个引擎")
             event.stop_event()
             return
         example_engine = self.available_engines[0]
@@ -681,7 +681,7 @@ class ImgRevSearcherPlugin(Star):
             }
             self.user_states[user_id] = state
             yield event.plain_result(
-                f"引擎 '{potential_engine}' 已被禁用，请在配置中启用或选择其他引擎（如{example_engine}）")
+                f"引擎 '{potential_engine}' 已被禁用，请联系管理员在配置中启用或选择其他引擎（如{example_engine}）")
             async for result in self._send_engine_prompt(event, state):
                 yield result
             event.stop_event()

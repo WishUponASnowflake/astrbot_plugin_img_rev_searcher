@@ -100,13 +100,18 @@ class ImgRevSearcherPlugin(Star):
             List[str]: 图像URL列表
         """
         img_urls = []
+        for component_str in getattr(message, 'message', []):
+            if "type='Image'" in str(component_str):
+                url_match = re.search(r"url='([^']+)'", str(component_str))
+                if url_match:
+                    img_urls.append(url_match.group(1))
         raw_message = getattr(message, 'raw_message', '')
         if isinstance(raw_message, dict) and "message" in raw_message:
             for msg_part in raw_message.get("message", []):
                 if msg_part.get("type") == "image":
                     data = msg_part.get("data", {})
                     url = data.get("url", "")
-                    if url:
+                    if url and url not in img_urls:
                         img_urls.append(url)
         return img_urls
 

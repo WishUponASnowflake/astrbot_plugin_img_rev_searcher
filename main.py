@@ -120,7 +120,7 @@ class UserStateManager:
             self.cleanup_task = None
 
 
-@register("astrbot_plugin_img_rev_seacher", "drdon1234", "以图搜图，找出处", "2.1")
+@register("astrbot_plugin_img_rev_seacher", "drdon1234", "图片反搜项目，以图搜图，找出处", "2.2")
 class ImgRevSearcherPlugin(Star):
     ALL_ENGINES = ["animetrace", "baidu", "bing", "copyseeker", "ehentai", "google", "saucenao", "tineye"]
     ENGINE_INFO = {

@@ -400,7 +400,7 @@ class ImgRevSearcherPlugin(Star):
             提示消息结果
         """
         if not self.available_engines:
-            yield event.plain_result("当前没有可用的搜索引擎，请在配置中启用至少一个引擎")
+            yield event.plain_result("当前没有可用的搜索引擎，请联系管理员在配置中启用至少一个引擎")
             return
         example_engine = self.available_engines[0] if self.available_engines else "none"
         if not state.get('engine'):
@@ -628,7 +628,7 @@ class ImgRevSearcherPlugin(Star):
             处理结果消息
         """
         if not self.available_engines:
-            yield event.plain_result("当前没有可用的搜索引擎，请在配置中启用至少一个引擎")
+            yield event.plain_result("当前没有可用的搜索引擎，请联系管理员在配置中启用至少一个引擎")
             event.stop_event()
             return
         example_engine = self.available_engines[0]

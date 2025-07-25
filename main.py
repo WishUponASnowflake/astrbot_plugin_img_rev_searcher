@@ -39,7 +39,7 @@ class ImgRevSearcherPlugin(Star):
             default_cookies=default_cookies
         )
 
-    def _split_text_by_length(self, text: str, max_length: int = 2000) -> List[str]:
+    def _split_text_by_length(self, text: str, max_length: int = 4000) -> List[str]:
         """
         将文本按最大长度分割，尽量在50个连续短横线处截断
 

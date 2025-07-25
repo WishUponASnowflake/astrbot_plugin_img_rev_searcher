@@ -177,5 +177,51 @@
         "default": "AEC=AVh_V2iW1iVnSEtzbnmwGdrSjkQ1v9ZzahU4hA5nELoMmWK1ccurfDuxZXo; SOCS=CAISHwgBEhJnd3NfMjAyNTA3MjQtMF9SQzEaBXpoLUNOIAEaBgiAkovEBg; NID=525=bpfcS4TLjnG44jvReynMZcUMsIXcplboAKf5CLj_TkLpvyXqVwCzEMNsOCHJ1iJPqiVoWdbCKw7H9Llf9UnGL7IvHW22TEMFY0eF7D__WvwRNIL7hCEkV3DYcncsA4jbBRk3ucyYQIc9PkW2JoBacwludbIIKmW5WvO66VFaQK7-JTvZE2s4ohjTGQUH0GfjjFX-67UwKSjhlHtgxQbwlZh2hfZ5IZwU-VX6ZnkqqI6y"
       }
     }
+  },
+  "available_apis": {
+    "description": "各搜索引擎的启用状态",
+    "type": "object",
+    "items": {
+      "animetrace": {
+        "description": "是否启用AnimeTrace搜索",
+        "type": "bool",
+        "default": true
+      },
+      "baidu": {
+        "description": "是否启用百度搜索",
+        "type": "bool",
+        "default": true
+      },
+      "bing": {
+        "description": "是否启用Bing搜索",
+        "type": "bool",
+        "default": true
+      },
+      "copyseeker": {
+        "description": "是否启用CopySeeker搜索",
+        "type": "bool",
+        "default": true
+      },
+      "ehentai": {
+        "description": "是否启用E-Hentai/ExHentai搜索",
+        "type": "bool",
+        "default": true
+      },
+      "google": {
+        "description": "是否启用Google Lens搜索",
+        "type": "bool",
+        "default": true
+      },
+      "saucenao": {
+        "description": "是否启用SauceNAO搜索",
+        "type": "bool",
+        "default": true
+      },
+      "tineye": {
+        "description": "是否启用TinEye搜索",
+        "type": "bool",
+        "default": true
+      }
+    }
   }
 } 

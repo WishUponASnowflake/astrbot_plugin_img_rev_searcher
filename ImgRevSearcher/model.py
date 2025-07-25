@@ -1,14 +1,12 @@
-import datetime
 import io
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Optional
 from PIL import Image, ImageDraw, ImageFont
 from .utils import Network
 from .utils.types import FileContent
 from .utils.api_request import AnimeTrace, BaiDu, Bing, Copyseeker, EHentai, GoogleLens, SauceNAO, Tineye
 
 
-# 定义搜索引擎映射
 ENGINE_MAP = {
     "animetrace": AnimeTrace,
     "baidu": BaiDu,

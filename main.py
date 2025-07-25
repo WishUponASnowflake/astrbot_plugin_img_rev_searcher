@@ -8,7 +8,7 @@ from typing import List
 import httpx
 from PIL import Image
 from astrbot.api.event import AstrMessageEvent, filter
-from astrbot.api.message_components import Image as AstrImage
+from astrbot.api.message_components import Image as AstrImage, Nodes, Node, Plain
 from astrbot.api.star import Context, Star, register
 from pathlib import Path
 from .ImgRevSearcher.model import BaseSearchModel
@@ -39,7 +39,7 @@ class ImgRevSearcherPlugin(Star):
             default_cookies=default_cookies
         )
 
-    def _split_text_by_length(self, text: str, max_length: int = 4000) -> List[str]:
+    def _split_text_by_length(self, text: str, max_length: int = 2000) -> List[str]:
         """
         将文本按最大长度分割，尽量在50个连续短横线处截断
 
@@ -52,28 +52,18 @@ class ImgRevSearcherPlugin(Star):
         """
         if len(text) <= max_length:
             return [text]
-        
-        # 定义分隔符：50个连续短横线
         separator = "-" * 50
-        
         result = []
         while text:
             if len(text) <= max_length:
                 result.append(text)
                 break
-            
-            # 寻找距离max_length最近的分隔符位置
             cut_index = max_length
             separator_index = text.rfind(separator, 0, max_length)
-            
             if separator_index != -1 and separator_index > max_length // 2:  # 确保分隔符不是在文本开头
-                # 如果找到分隔符，在分隔符后截断
                 cut_index = separator_index + len(separator)
-            
-            # 截取文本
             result.append(text[:cut_index])
             text = text[cut_index:]
-        
         return result
 
     async def cleanup_loop(self):
@@ -310,11 +300,24 @@ class ImgRevSearcherPlugin(Star):
             event.stop_event()
             return
         elif message_text.strip().lower() == "是":
-            # 分割长文本
             text_parts = self._split_text_by_length(state["result_text"])
-            # 依次发送文本片段
-            for part in text_parts:
-                yield event.plain_result(part)
+            if len(text_parts) > 1:
+                sender_name = "图片搜索bot"
+                sender_id = event.get_self_id()
+                try:
+                    sender_id = int(sender_id)
+                except:
+                    sender_id = 10000
+                for i, part in enumerate(text_parts):
+                    node = Node(
+                        name=sender_name,
+                        uin=sender_id,
+                        content=[Plain(f"【搜索结果 {i+1}/{len(text_parts)}】\n{part}")]
+                    )
+                    nodes = Nodes([node])
+                    await event.send(event.chain_result([nodes]))
+            else:
+                yield event.plain_result(text_parts[0])
             del self.user_states[user_id]
             event.stop_event()
 

@@ -304,8 +304,7 @@ class ImgRevSearcherPlugin(Star):
         table_height = header_height + cell_height * len(self.available_engines)
         height = title_height + table_height + 25
         border_width = 2
-
-        # 绘制圆角矩形工具方法
+        
         def rounded_rectangle(draw, xy, radius, fill=None, outline=None, width=1):
             x1, y1, x2, y2 = xy
             diameter = 2 * radius
@@ -379,7 +378,7 @@ class ImgRevSearcherPlugin(Star):
             col_x += col_widths[i]
             draw.line([(col_x, table_y), (col_x, table_bottom)], fill=COLOR_THEME["border"], width=border_width)
         with io.BytesIO() as output:
-            img.save(output, format="JPEG", quality=95)
+            img.save(output, format="JPEG", quality=85)
             output.seek(0)
             async for result in self._send_image(event, output.getvalue()):
                 yield result

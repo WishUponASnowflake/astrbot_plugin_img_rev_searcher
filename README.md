@@ -105,6 +105,7 @@ pip install <module>
 - `exhentai` 和 `google_lens` 对 **地区** 有严格检查
 - `exhentai` 要求 **优质欧美 IP**
 - `google_lens` 要求参数 `country` 不能为 `CN`，且`IP`必须与`country`相符合
+- 图片参数支持 `.gif` 格式，将会截取 **第一帧** 进行搜索
 
 ---
 

@@ -383,9 +383,18 @@ TineyeResponse
 ---
 
 # 搜索流程及结果示例
-<div align="center">
-  <img src="https://github.com/user-attachments/assets/e06a19ab-cd83-4621-95fe-65916a13b37b" alt="1" width="25%"><br>
-  <img src="https://github.com/user-attachments/assets/56404911-d129-4ebe-ae25-6bddc1e4b26d" alt="2" width="25%"><br>
-  <img src="https://github.com/user-attachments/assets/2677d9d0-7908-4b6c-ba3c-cede100b4192" alt="3" width="25%"><br>
-  <img src="https://github.com/user-attachments/assets/92e3012a-b9c7-4f5b-8e52-80b5791acb66" alt="4" width="25%">
+<div align="left">
+
+### 第一步：触发搜索流程
+<img src="https://github.com/user-attachments/assets/e06a19ab-cd83-4621-95fe-65916a13b37b" alt="1" width="40%"><br><br>
+
+### 第二步：收到图片格式的搜索结果
+<img src="https://github.com/user-attachments/assets/56404911-d129-4ebe-ae25-6bddc1e4b26d" alt="2" width="40%"><br><br>
+
+### 第三步：选择是否需要文字格式的搜索结果
+<img src="https://github.com/user-attachments/assets/2677d9d0-7908-4b6c-ba3c-cede100b4192" alt="3" width="40%"><br><br>
+
+### 第四步：收到文字格式的搜索结果
+<img src="https://github.com/user-attachments/assets/92e3012a-b9c7-4f5b-8e52-80b5791acb66" alt="4" width="40%">
+
 </div>

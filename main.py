@@ -4,7 +4,7 @@ import os
 import re
 import tempfile
 import time
-from typing import List, Dict, Tuple, Optional
+from typing import List
 import httpx
 from PIL import Image
 from astrbot.api.event import AstrMessageEvent, filter
@@ -13,127 +13,10 @@ from astrbot.api.star import Context, Star, register
 from pathlib import Path
 from .ImgRevSearcher.model import BaseSearchModel
 from PIL import ImageDraw, ImageFont
-from enum import Enum, auto
-
-_FONT_CACHE: Dict[str, Dict[int, ImageFont.ImageFont]] = {}
 
 
-class UserState(Enum):
-    """用户交互状态枚举"""
-    WAITING_ENGINE = auto()
-    WAITING_IMAGE = auto()
-    WAITING_BOTH = auto()
-    WAITING_TEXT_CONFIRM = auto()
-
-
-def get_font(font_path: str, size: int) -> ImageFont.ImageFont:
-    """
-    获取指定路径和大小的字体，支持缓存
-
-    参数:
-        font_path: 字体文件路径
-        size: 字体大小
-
-    返回:
-        ImageFont.ImageFont: 字体对象
-    """
-    if font_path not in _FONT_CACHE:
-        _FONT_CACHE[font_path] = {}
-    if size not in _FONT_CACHE[font_path]:
-        try:
-            _FONT_CACHE[font_path][size] = ImageFont.truetype(font_path, size)
-        except Exception:
-            _FONT_CACHE[font_path][size] = ImageFont.load_default()
-    return _FONT_CACHE[font_path][size]
-
-
-class UserStateManager:
-    """用户状态管理类"""
-
-    def __init__(self, cleanup_interval: int = 600):
-        """
-        初始化用户状态管理器
-
-        参数:
-            cleanup_interval: 清理过期状态的时间间隔（秒）
-        """
-        self.states = {}
-        self.cleanup_interval = cleanup_interval
-        self.cleanup_task = None
-
-    def start_cleanup_task(self):
-        """启动清理任务"""
-        if self.cleanup_task is None:
-            self.cleanup_task = asyncio.create_task(self.cleanup_loop())
-
-    async def cleanup_loop(self):
-        """定期清理过期的用户状态"""
-        while True:
-            await asyncio.sleep(self.cleanup_interval)
-            now = time.time()
-            to_delete = [
-                user_id for user_id, state in list(self.states.items())
-                if now - state.get('timestamp', 0) > state.get('timeout', 30)
-            ]
-            for user_id in to_delete:
-                del self.states[user_id]
-
-    def set_state(self, user_id: str, state: dict):
-        """设置用户状态"""
-        if self.has_state(user_id):
-            old_state = self.states[user_id]
-            if 'step' not in state and 'step' in old_state:
-                state['step'] = old_state['step']
-            old_state.update(state)
-            self.states[user_id] = old_state
-        else:
-            self.states[user_id] = state
-        if 'timestamp' not in self.states[user_id]:
-            self.states[user_id]['timestamp'] = time.time()
-        if 'timeout' not in self.states[user_id]:
-            self.states[user_id]['timeout'] = 30
-
-    def get_state(self, user_id: str) -> dict:
-        """获取用户状态"""
-        return self.states.get(user_id, {})
-
-    def has_state(self, user_id: str) -> bool:
-        """检查用户是否有状态"""
-        return user_id in self.states
-
-    def delete_state(self, user_id: str):
-        """删除用户状态"""
-        if user_id in self.states:
-            del self.states[user_id]
-
-    def is_expired(self, user_id: str) -> bool:
-        """检查用户状态是否过期"""
-        if not self.has_state(user_id):
-            return True
-        state = self.states[user_id]
-        return time.time() - state.get('timestamp', 0) > state.get('timeout', 30)
-
-    async def cancel(self):
-        """取消清理任务"""
-        if self.cleanup_task:
-            self.cleanup_task.cancel()
-            self.cleanup_task = None
-
-
-@register("astrbot_plugin_img_rev_seacher", "drdon1234", "图片反搜项目，以图搜图，找出处", "2.2")
+@register("astrbot_plugin_img_rev_seacher", "drdon1234", "以图搜图，找出处", "2.2")
 class ImgRevSearcherPlugin(Star):
-    ALL_ENGINES = ["animetrace", "baidu", "bing", "copyseeker", "ehentai", "google", "saucenao", "tineye"]
-    ENGINE_INFO = {
-        "animetrace": {"url": "https://www.animetrace.com/", "anime": True},
-        "baidu": {"url": "https://graph.baidu.com/", "anime": False},
-        "bing": {"url": "https://www.bing.com/images/search", "anime": False},
-        "copyseeker": {"url": "https://copyseeker.net/", "anime": False},
-        "ehentai": {"url": "https://e-hentai.org/", "anime": True},
-        "google": {"url": "https://lens.google.com/", "anime": False},
-        "saucenao": {"url": "https://saucenao.com/", "anime": True},
-        "tineye": {"url": "https://tineye.com/search/", "anime": False}
-    }
-
     def __init__(self, context: Context, config: dict):
         """
         初始化插件
@@ -143,23 +26,21 @@ class ImgRevSearcherPlugin(Star):
             config: 配置文件中的配置
         """
         super().__init__(context)
-        self.client = httpx.AsyncClient(timeout=60)
-        self.user_states = UserStateManager()
-        self.user_states.start_cleanup_task()
+        self.client = httpx.AsyncClient()
+        self.user_states = {}
+        self.cleanup_task = asyncio.create_task(self.cleanup_loop())
         available_apis_config = config.get("available_apis", {})
         self.available_engines = []
-        for engine in self.ALL_ENGINES:
+        all_engines = ["animetrace", "baidu", "bing", "copyseeker", "ehentai", "google", "saucenao", "tineye"]
+        for engine in all_engines:
             if available_apis_config.get(engine, True):
                 self.available_engines.append(engine)
-        if not self.available_engines:
-            print("警告: 没有启用任何搜索引擎，请在配置中启用至少一个引擎")
-            self.available_engines = self.ALL_ENGINES.copy()
         proxies = config.get("proxies", "")
         default_params = config.get("default_params", {})
         default_cookies = config.get("default_cookies", {})
         self.search_model = BaseSearchModel(
             proxies=proxies,
-            timeout=config.get("timeout", 60),
+            timeout=60,
             default_params=default_params,
             default_cookies=default_cookies
         )
@@ -191,33 +72,28 @@ class ImgRevSearcherPlugin(Star):
             text = text[cut_index:]
         return result
 
+    async def cleanup_loop(self):
+        """
+        清理循环任务
+
+        定期清理过期的用户状态
+        """
+        while True:
+            await asyncio.sleep(600)
+            now = time.time()
+            to_delete = [user_id for user_id, state in list(self.user_states.items()) if now - state['timestamp'] > 30]
+            for user_id in to_delete:
+                del self.user_states[user_id]
+
     async def terminate(self):
         """
         终止插件
 
         关闭HTTP客户端并取消清理任务
         """
-        print("正在终止图像搜索插件...")
-        if hasattr(self, 'client'):
-            try:
-                await self.client.aclose()
-                print("HTTP客户端已关闭")
-            except Exception as e:
-                print(f"关闭HTTP客户端时出错: {e}")
-        if hasattr(self, 'user_states'):
-            try:
-                await self.user_states.cancel()
-                print("用户状态管理器已关闭")
-            except Exception as e:
-                print(f"终止用户状态管理器时出错: {e}")
-        try:
-            if hasattr(self, 'search_model'):
-                if hasattr(self.search_model, 'terminate') and callable(self.search_model.terminate):
-                    await self.search_model.terminate()
-                    print("搜索模型已终止")
-        except Exception as e:
-            print(f"释放其他资源时出错: {e}")
-        print("图像搜索插件已完全终止")
+        await self.client.aclose()
+        if hasattr(self, 'cleanup_task'):
+            self.cleanup_task.cancel()
 
     def _get_img_urls(self, message) -> List[str]:
         """
@@ -278,7 +154,7 @@ class ImgRevSearcherPlugin(Star):
         """
         return text.startswith("https://") and text.lower().endswith((".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"))
 
-    async def _download_img(self, url: str) -> Optional[io.BytesIO]:
+    async def _download_img(self, url: str):
         """
         下载图像
 
@@ -286,28 +162,14 @@ class ImgRevSearcherPlugin(Star):
             url: 图像URL
 
         返回:
-            Optional[io.BytesIO]: 下载的图像数据，如果失败则为None
+            io.BytesIO: 下载的图像数据，或None如果失败
         """
         try:
             r = await self.client.get(url, timeout=15)
             if r.status_code == 200:
-                content = r.content
-                try:
-                    img = Image.open(io.BytesIO(content))
-                    img_format = img.format
-                    if img_format not in ['JPEG', 'PNG', 'GIF', 'WEBP', 'BMP']:
-                        print(f"警告: 未知的图片格式 {img_format}")
-                    img_buffer = io.BytesIO(content)
-                    return img_buffer
-                except Exception as e:
-                    print(f"无法解析图片数据: {str(e)}")
-                    return None
-            else:
-                print(f"下载图片失败，HTTP状态码: {r.status_code}")
-        except httpx.TimeoutException:
-            print(f"下载图片超时: {url}")
-        except Exception as e:
-            print(f"下载图片发生错误: {str(e)}")
+                return io.BytesIO(r.content)
+        except:
+            pass
         return None
 
     async def get_imgs(self, img_urls: List[str]) -> List[io.BytesIO]:
@@ -339,11 +201,9 @@ class ImgRevSearcherPlugin(Star):
         with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
             temp_file.write(content)
             temp_file_path = temp_file.name
-        try:
-            yield event.chain_result([AstrImage.fromFileSystem(temp_file_path)])
-        finally:
-            if os.path.exists(temp_file_path):
-                os.unlink(temp_file_path)
+        yield event.chain_result([AstrImage.fromFileSystem(temp_file_path)])
+        if os.path.exists(temp_file_path):
+            os.unlink(temp_file_path)
 
     async def _send_engine_intro(self, event: AstrMessageEvent):
         """
@@ -355,6 +215,41 @@ class ImgRevSearcherPlugin(Star):
         产生:
             介绍图像消息结果
         """
+        engine_info = {
+            "animetrace": {
+                "url": "https://www.animetrace.com/",
+                "anime": True
+            },
+            "baidu": {
+                "url": "https://graph.baidu.com/",
+                "anime": False
+            },
+            "bing": {
+                "url": "https://www.bing.com/images/search",
+                "anime": False
+            },
+            "copyseeker": {
+                "url": "https://copyseeker.net/",
+                "anime": False
+            },
+            "ehentai": {
+                "url": "https://e-hentai.org/",
+                "anime": True
+            },
+            "google": {
+                "url": "https://lens.google.com/",
+                "anime": False
+            },
+            "saucenao": {
+                "url": "https://saucenao.com/",
+                "anime": True
+            },
+            "tineye": {
+                "url": "https://tineye.com/search/",
+                "anime": False
+            }
+        }
+
         colors = {
             "bg": (255, 255, 255),
             "header_bg": (67, 99, 216),
@@ -362,7 +257,7 @@ class ImgRevSearcherPlugin(Star):
             "table_header": (240, 242, 245),
             "cell_bg_even": (250, 250, 252),
             "cell_bg_odd": (255, 255, 255),
-            "border": (180, 185, 195),
+            "border": (180, 185, 195),  # 使用与外边框相同的颜色
             "text": (50, 50, 50),
             "url": (41, 98, 255),
             "success": (76, 175, 80),
@@ -377,21 +272,33 @@ class ImgRevSearcherPlugin(Star):
         table_height = header_height + cell_height * len(self.available_engines)
         height = title_height + table_height + 25
         border_width = 2
+
+        def rounded_rectangle(draw, xy, radius, fill=None, outline=None, width=1):
+            x1, y1, x2, y2 = xy
+            diameter = 2 * radius
+            draw.rectangle([x1 + radius, y1, x2 - radius, y2], fill=fill, outline=outline, width=width)
+            draw.rectangle([x1, y1 + radius, x2, y2 - radius], fill=fill, outline=outline, width=width)
+            draw.pieslice([x1, y1, x1 + diameter, y1 + diameter], 180, 270, fill=fill, outline=outline, width=width)
+            draw.pieslice([x2 - diameter, y1, x2, y1 + diameter], 270, 360, fill=fill, outline=outline, width=width)
+            draw.pieslice([x1, y2 - diameter, x1 + diameter, y2], 90, 180, fill=fill, outline=outline, width=width)
+            draw.pieslice([x2 - diameter, y2 - diameter, x2, y2], 0, 90, fill=fill, outline=outline, width=width)
+
         img = Image.new('RGB', (width, height), colors["bg"])
         draw = ImageDraw.Draw(img)
         workspace_root = Path(__file__).parent
         try:
             font_path = str(workspace_root / "ImgRevSearcher/resource/font/arialuni.ttf")
-            title_font = get_font(font_path, 24)
-            header_font = get_font(font_path, 18)
-            body_font = get_font(font_path, 16)
+            title_font = ImageFont.truetype(font_path, 24)
+            header_font = ImageFont.truetype(font_path, 18)
+            body_font = ImageFont.truetype(font_path, 16)
         except Exception:
             title_font = ImageFont.load_default()
             header_font = ImageFont.load_default()
             body_font = ImageFont.load_default()
-        self._draw_rounded_rectangle(draw, [20, 15, width-20, title_height-5], 10, fill=colors["header_bg"])
+        rounded_rectangle(draw, [20, 15, width - 20, title_height - 5], 10, fill=colors["header_bg"])
         title = "可用搜索引擎"
-        title_width, _ = self._get_text_dimensions(draw, title, title_font)
+        title_width = draw.textlength(title, font=title_font) if hasattr(draw, 'textlength') else \
+        title_font.getsize(title)[0]
         title_x = (width - title_width) // 2
         draw.text((title_x, 25), title, font=title_font, fill=colors["header_text"])
         table_x = 20
@@ -399,26 +306,29 @@ class ImgRevSearcherPlugin(Star):
         col_widths = [int(table_width * 0.20), int(table_width * 0.50), int(table_width * 0.30)]
         table_y = title_height + 10
         table_bottom = table_y + header_height + cell_height * len(self.available_engines)
-        draw.rectangle([table_x, table_y, table_x + sum(col_widths), table_y + header_height], fill=colors["table_header"])
+        draw.rectangle([table_x, table_y, table_x + sum(col_widths), table_y + header_height],
+                       fill=colors["table_header"])
         y = table_y + header_height
         for idx, engine in enumerate(self.available_engines):
-            if engine not in self.ENGINE_INFO:
+            if engine not in engine_info:
                 continue
             row_bg = colors["cell_bg_even"] if idx % 2 == 0 else colors["cell_bg_odd"]
-            draw.rectangle([table_x, y, table_x + sum(col_widths), y + cell_height], fill=row_bg)
+            draw.rectangle([table_x, y, table_x + sum(col_widths), y + cell_height],
+                           fill=row_bg)
             y += cell_height
         headers = ["引擎", "网址", "二次元图片专用"]
         x = table_x
         for i, header in enumerate(headers):
-            text_width, _ = self._get_text_dimensions(draw, header, header_font)
+            text_width = draw.textlength(header, font=header_font) if hasattr(draw, 'textlength') else \
+            header_font.getsize(header)[0]
             text_x = x + (col_widths[i] - text_width) // 2
             draw.text((text_x, table_y + (header_height - 18) // 2), header, font=header_font, fill=colors["text"])
             x += col_widths[i]
         y = table_y + header_height
         for idx, engine in enumerate(self.available_engines):
-            if engine not in self.ENGINE_INFO:
+            if engine not in engine_info:
                 continue
-            info = self.ENGINE_INFO[engine]
+            info = engine_info[engine]
             x = table_x
             draw.text((x + 15, y + (cell_height - 16) // 2), engine, font=body_font, fill=colors["text"])
             x += col_widths[0]
@@ -426,19 +336,25 @@ class ImgRevSearcherPlugin(Star):
             x += col_widths[1]
             mark = "✓" if info["anime"] else "✗"
             mark_color = colors["success"] if info["anime"] else colors["fail"]
-            mark_width, _ = self._get_text_dimensions(draw, mark, header_font)
-            draw.text((x + (col_widths[2] - mark_width) // 2, y + (cell_height - 18) // 2), mark, font=header_font, fill=mark_color)
+            mark_width = draw.textlength(mark, font=header_font) if hasattr(draw, 'textlength') else \
+            header_font.getsize(mark)[0]
+            draw.text((x + (col_widths[2] - mark_width) // 2, y + (cell_height - 18) // 2), mark, font=header_font,
+                      fill=mark_color)
             y += cell_height
-        draw.rectangle([table_x, table_y, table_x + sum(col_widths), table_bottom], outline=colors["border"], width=border_width)
+        draw.rectangle([table_x, table_y, table_x + sum(col_widths), table_bottom],
+                       outline=colors["border"], width=border_width)
         for i in range(1, len(self.available_engines) + 1):
             line_y = table_y + header_height + cell_height * i
-            if i < len(self.available_engines):
-                draw.line([(table_x, line_y), (table_x + sum(col_widths), line_y)], fill=colors["border"], width=border_width)
-        draw.line([(table_x, table_y + header_height), (table_x + sum(col_widths), table_y + header_height)], fill=colors["border"], width=border_width)
+            if i < len(self.available_engines):  # 不是最后一行
+                draw.line([(table_x, line_y), (table_x + sum(col_widths), line_y)],
+                          fill=colors["border"], width=border_width)
+        draw.line([(table_x, table_y + header_height), (table_x + sum(col_widths), table_y + header_height)],
+                  fill=colors["border"], width=border_width)
         col_x = table_x
         for i in range(len(col_widths) - 1):
             col_x += col_widths[i]
-            draw.line([(col_x, table_y), (col_x, table_bottom)], fill=colors["border"], width=border_width)
+            draw.line([(col_x, table_y), (col_x, table_bottom)],
+                      fill=colors["border"], width=border_width)
         with io.BytesIO() as output:
             img.save(output, format="JPEG", quality=95)
             output.seek(0)
@@ -457,45 +373,26 @@ class ImgRevSearcherPlugin(Star):
         产生:
             搜索结果消息
         """
+        file_bytes = img_buffer.getvalue()
+        result_text = await self.search_model.search(api=engine, file=file_bytes)
+        img_buffer.seek(0)
         try:
-            file_bytes = img_buffer.getvalue()
-            result_text = await self.search_model.search(api=engine, file=file_bytes)
-            img_buffer.seek(0)
-            try:
-                source_image = Image.open(img_buffer)
-                result_img = self.search_model.draw_results(engine, result_text, source_image)
-            except Exception as e:
-                print(f"绘制结果图像失败: {str(e)}")
-                result_img = self.search_model.draw_error(engine, f"绘制结果图像失败: {str(e)}")
-            with io.BytesIO() as output:
-                result_img.save(output, format="JPEG", quality=85)
-                output.seek(0)
-                async for result in self._send_image(event, output.getvalue()):
-                    yield result
-            yield event.plain_result("需要文本格式的结果吗？回复\"是\"以获取，10秒内有效")
-            user_id = event.get_sender_id()
-            self.user_states.set_state(user_id, {
-                "step": UserState.WAITING_TEXT_CONFIRM,
-                "timestamp": time.time(),
-                "result_text": result_text,
-                "timeout": 10
-            })
+            source_image = Image.open(img_buffer)
+            result_img = self.search_model.draw_results(engine, result_text, source_image)
         except Exception as e:
-            error_msg = f"搜索引擎 {engine} 搜索失败: {str(e)}"
-            print(error_msg)
-            yield event.plain_result(error_msg)
-            try:
-                error_img = self.search_model.draw_error(engine, error_msg)
-                with io.BytesIO() as output:
-                    error_img.save(output, format="JPEG", quality=85)
-                    output.seek(0)
-                    async for result in self._send_image(event, output.getvalue()):
-                        yield result
-            except Exception as inner_e:
-                print(f"绘制错误图像失败: {str(inner_e)}")
-                yield event.plain_result(f"绘制错误图像失败: {str(inner_e)}")
-            user_id = event.get_sender_id()
-            self.user_states.delete_state(user_id)
+            result_img = self.search_model.draw_error(engine, str(e))
+        with io.BytesIO() as output:
+            result_img.save(output, format="JPEG", quality=85)
+            output.seek(0)
+            async for result in self._send_image(event, output.getvalue()):
+                yield result
+        yield event.plain_result("需要文本格式的结果吗？回复\"是\"以获取，10秒内有效")
+        user_id = event.get_sender_id()
+        self.user_states[user_id] = {
+            "step": "waiting_text_confirm",
+            "timestamp": time.time(),
+            "result_text": result_text
+        }
 
     async def _send_engine_prompt(self, event: AstrMessageEvent, state: dict):
         """
@@ -509,7 +406,7 @@ class ImgRevSearcherPlugin(Star):
             提示消息结果
         """
         if not self.available_engines:
-            yield event.plain_result("当前没有可用的搜索引擎，请联系管理员在配置中启用至少一个引擎")
+            yield event.plain_result("当前没有可用的搜索引擎，请在配置中启用至少一个引擎")
             return
         example_engine = self.available_engines[0] if self.available_engines else "none"
         if not state.get('engine'):
@@ -534,8 +431,8 @@ class ImgRevSearcherPlugin(Star):
             超时提示消息
         """
         yield event.plain_result("等待超时，操作取消")
-        if self.user_states.has_state(user_id):
-            self.user_states.delete_state(user_id)
+        if user_id in self.user_states:
+            del self.user_states[user_id]
         event.stop_event()
 
     async def _handle_waiting_text_confirm(self, event: AstrMessageEvent, state: dict, user_id: str):
@@ -550,38 +447,31 @@ class ImgRevSearcherPlugin(Star):
         产生:
             处理结果消息
         """
-        try:
-            message_text = self._get_message_text(event.message_obj)
-            if self.user_states.is_expired(user_id):
-                yield event.plain_result("等待超时，操作取消")
-                self.user_states.delete_state(user_id)
-                event.stop_event()
-                return
-            elif message_text.strip().lower() == "是":
-                text_parts = self._split_text_by_length(state["result_text"])
-                sender_name = "图片搜索bot"
-                sender_id = event.get_self_id()
+        message_text = self._get_message_text(event.message_obj)
+        if time.time() - state["timestamp"] > 10:
+            del self.user_states[user_id]
+            event.stop_event()
+            return
+        elif message_text.strip().lower() == "是":
+            text_parts = self._split_text_by_length(state["result_text"])
+            sender_name = "图片搜索bot"
+            sender_id = event.get_self_id()
+            try:
+                sender_id = int(sender_id)
+            except:
+                sender_id = 10000
+            for i, part in enumerate(text_parts):
+                node = Node(
+                    name=sender_name,
+                    uin=sender_id,
+                    content=[Plain(f"【搜索结果 {i + 1}/{len(text_parts)}】\n{part}")]
+                )
+                nodes = Nodes([node])
                 try:
-                    sender_id = int(sender_id)
-                except:
-                    sender_id = 10000
-                for i, part in enumerate(text_parts):
-                    node = Node(
-                        name=sender_name,
-                        uin=sender_id,
-                        content=[Plain(f"【搜索结果 {i+1}/{len(text_parts)}】\n{part}")]
-                    )
-                    nodes = Nodes([node])
-                    try:
-                        await event.send(event.chain_result([nodes]))
-                    except Exception as e:
-                        yield event.plain_result(f"发送搜索结果失败: {str(e)}")
-                self.user_states.delete_state(user_id)
-                event.stop_event()
-        except Exception as e:
-            print(f"处理文本确认时出错: {str(e)}")
-            yield event.plain_result(f"处理消息时出错: {str(e)}，请重新开始搜索")
-            self.user_states.delete_state(user_id)
+                    await event.send(event.chain_result([nodes]))
+                except Exception as e:
+                    yield event.plain_result(f"发送搜索结果失败: {str(e)}")
+            del self.user_states[user_id]
             event.stop_event()
 
     async def _handle_waiting_engine(self, event: AstrMessageEvent, state: dict, user_id: str):
@@ -596,54 +486,45 @@ class ImgRevSearcherPlugin(Star):
         产生:
             处理结果消息
         """
-        try:
-            example_engine = self.available_engines[0] if self.available_engines else "none"
-            message_text = self._get_message_text(event.message_obj).lower()
-            if self.user_states.is_expired(user_id):
-                yield event.plain_result("等待超时，操作取消")
-                self.user_states.delete_state(user_id)
-                return
-            if not message_text:
-                yield event.plain_result(f"请回复有效的引擎名（如{example_engine}）")
-                self.user_states.set_state(user_id, {"timestamp": time.time()})
-                event.stop_event()
-                return
-            if message_text in self.available_engines:
-                state["engine"] = message_text
-                if state.get("preloaded_img"):
-                    try:
-                        async for result in self._perform_search(event, state["engine"], state["preloaded_img"]):
-                            yield result
-                    except Exception as e:
-                        yield event.plain_result(f"搜索失败: {str(e)}")
-                else:
-                    state["step"] = UserState.WAITING_IMAGE
-                    state["timestamp"] = time.time()
-                    yield event.plain_result(f"已选择引擎: {message_text}，请在30秒内发送一张图片，我会进行搜索")
+        example_engine = self.available_engines[0] if self.available_engines else "none"
+        message_text = self._get_message_text(event.message_obj).lower()
+        if not message_text:
+            yield event.plain_result(f"请回复有效的引擎名（如{example_engine}）")
+            state["timestamp"] = time.time()
+            event.stop_event()
+            return
+        if message_text in self.available_engines:
+            state["engine"] = message_text
+            if state.get("preloaded_img"):
+                try:
+                    async for result in self._perform_search(event, state["engine"], state["preloaded_img"]):
+                        yield result
+                except Exception as e:
+                    yield event.plain_result(f"搜索失败: {str(e)}")
             else:
-                all_engines = self.ALL_ENGINES
-                if message_text in all_engines and message_text not in self.available_engines:
-                    yield event.plain_result(f"引擎 '{message_text}' 已被禁用，请在配置中启用或选择其他引擎（如{example_engine}）")
-                    self.user_states.set_state(user_id, {"timestamp": time.time()})
+                state["step"] = "waiting_image"
+                state["timestamp"] = time.time()
+                yield event.plain_result(f"已选择引擎: {message_text}，请在30秒内发送一张图片，我会进行搜索")
+        else:
+            all_engines = ["animetrace", "baidu", "bing", "copyseeker", "ehentai", "google", "saucenao", "tineye"]
+            if message_text in all_engines and message_text not in self.available_engines:
+                yield event.plain_result(
+                    f"引擎 '{message_text}' 已被禁用，请在配置中启用或选择其他引擎（如{example_engine}）")
+                state["timestamp"] = time.time()
+                async for result in self._send_engine_prompt(event, state):
+                    yield result
+            else:
+                state.setdefault("invalid_attempts", 0)
+                state["invalid_attempts"] += 1
+                if state["invalid_attempts"] >= 2:
+                    yield event.plain_result("连续两次输入错误的引擎名，已取消操作")
+                    del self.user_states[user_id]
+                else:
+                    yield event.plain_result(f"引擎 '{message_text}' 不存在，请回复有效的引擎名（如{example_engine}）")
+                    state["timestamp"] = time.time()
                     async for result in self._send_engine_prompt(event, state):
                         yield result
-                else:
-                    state.setdefault("invalid_attempts", 0)
-                    state["invalid_attempts"] += 1
-                    if state["invalid_attempts"] >= 2:
-                        yield event.plain_result("连续两次输入错误的引擎名，已取消操作")
-                        self.user_states.delete_state(user_id)
-                    else:
-                        yield event.plain_result(f"引擎 '{message_text}' 不存在，请回复有效的引擎名（如{example_engine}）")
-                        self.user_states.set_state(user_id, {"timestamp": time.time()})
-                        async for result in self._send_engine_prompt(event, state):
-                            yield result
-            event.stop_event()
-        except Exception as e:
-            print(f"处理引擎选择时出错: {str(e)}")
-            yield event.plain_result(f"处理消息时出错: {str(e)}，请重新开始搜索")
-            self.user_states.delete_state(user_id)
-            event.stop_event()
+        event.stop_event()
 
     async def _handle_waiting_both(self, event: AstrMessageEvent, state: dict, user_id: str):
         """
@@ -657,70 +538,62 @@ class ImgRevSearcherPlugin(Star):
         产生:
             处理结果消息
         """
-        try:
-            example_engine = self.available_engines[0] if self.available_engines else "none"
-            if self.user_states.is_expired(user_id):
-                yield event.plain_result("等待超时，操作取消")
-                self.user_states.delete_state(user_id)
-                return
-            updated = False
-            message_text = self._get_message_text(event.message_obj).lower()
-            img_urls = self._get_img_urls(event.message_obj)
-            if message_text and message_text in self.available_engines and not state.get('engine'):
-                state["engine"] = message_text
-                updated = True
-            img_buffer = None
-            if img_urls:
-                img_buffer = await self._download_img(img_urls[0])
-            elif self._is_image_url(message_text):
-                img_buffer = await self._download_img(message_text)
-            if img_buffer and not state.get('preloaded_img'):
-                state["preloaded_img"] = img_buffer
-                updated = True
-            if state.get("engine") and state.get("preloaded_img"):
-                try:
-                    async for result in self._perform_search(event, state["engine"], state["preloaded_img"]):
-                        yield result
-                except Exception as e:
-                    yield event.plain_result(f"搜索失败: {str(e)}")
-                event.stop_event()
-                return
-            if updated:
-                self.user_states.set_state(user_id, {"timestamp": time.time()})
-                async for result in self._send_engine_prompt(event, state):
+        example_engine = self.available_engines[0] if self.available_engines else "none"
+        updated = False
+        message_text = self._get_message_text(event.message_obj).lower()
+        img_urls = self._get_img_urls(event.message_obj)
+        if message_text and message_text in self.available_engines and not state.get('engine'):
+            state["engine"] = message_text
+            updated = True
+        img_buffer = None
+        if img_urls:
+            img_buffer = await self._download_img(img_urls[0])
+        elif self._is_image_url(message_text):
+            img_buffer = await self._download_img(message_text)
+        if img_buffer and not state.get('preloaded_img'):
+            state["preloaded_img"] = img_buffer
+            updated = True
+        if state.get("engine") and state.get("preloaded_img"):
+            try:
+                async for result in self._perform_search(event, state["engine"], state["preloaded_img"]):
                     yield result
-            else:
-                self.user_states.set_state(user_id, {"timestamp": time.time()})
-                is_invalid_engine_attempt = message_text and not self._is_image_url(message_text) and not state.get('engine')
-                if is_invalid_engine_attempt:
-                    all_engines = self.ALL_ENGINES
-                    if message_text in all_engines and message_text not in self.available_engines:
-                        yield event.plain_result(f"引擎 '{message_text}' 已被禁用，请在配置中启用或选择其他引擎（如{example_engine}）")
+            except Exception as e:
+                yield event.plain_result(f"搜索失败: {str(e)}")
+            event.stop_event()
+            return
+        if updated:
+            state["timestamp"] = time.time()
+            async for result in self._send_engine_prompt(event, state):
+                yield result
+        else:
+            state["timestamp"] = time.time()
+            is_invalid_engine_attempt = message_text and not self._is_image_url(message_text) and not state.get(
+                'engine')
+            if is_invalid_engine_attempt:
+                all_engines = ["animetrace", "baidu", "bing", "copyseeker", "ehentai", "google", "saucenao", "tineye"]
+                if message_text in all_engines and message_text not in self.available_engines:
+                    yield event.plain_result(
+                        f"引擎 '{message_text}' 已被禁用，请在配置中启用或选择其他引擎（如{example_engine}）")
+                    async for result in self._send_engine_prompt(event, state):
+                        yield result
+                else:
+                    state.setdefault("invalid_attempts", 0)
+                    state["invalid_attempts"] += 1
+                    if state["invalid_attempts"] >= 2:
+                        yield event.plain_result("连续两次输入错误的引擎名，已取消操作")
+                        del self.user_states[user_id]
+                    else:
+                        yield event.plain_result(f"引擎 '{message_text}' 不存在，请回复有效的引擎名（如{example_engine}）")
                         async for result in self._send_engine_prompt(event, state):
                             yield result
-                    else:
-                        state.setdefault("invalid_attempts", 0)
-                        state["invalid_attempts"] += 1
-                        if state["invalid_attempts"] >= 2:
-                            yield event.plain_result("连续两次输入错误的引擎名，已取消操作")
-                            self.user_states.delete_state(user_id)
-                        else:
-                            yield event.plain_result(f"引擎 '{message_text}' 不存在，请回复有效的引擎名（如{example_engine}）")
-                            async for result in self._send_engine_prompt(event, state):
-                                yield result
-                else:
-                    if not state.get('engine') and not state.get('preloaded_img'):
-                        yield event.plain_result(f"请提供引擎名（如{example_engine}）和图片")
-                    elif not state.get('engine'):
-                        yield event.plain_result(f"请提供引擎名（如{example_engine}）")
-                    elif not state.get('preloaded_img'):
-                        yield event.plain_result("请提供图片")
-            event.stop_event()
-        except Exception as e:
-            print(f"处理等待引擎和图片时出错: {str(e)}")
-            yield event.plain_result(f"处理消息时出错: {str(e)}，请重新开始搜索")
-            self.user_states.delete_state(user_id)
-            event.stop_event()
+            else:
+                if not state.get('engine') and not state.get('preloaded_img'):
+                    yield event.plain_result(f"请提供引擎名（如{example_engine}）和图片")
+                elif not state.get('engine'):
+                    yield event.plain_result(f"请提供引擎名（如{example_engine}）")
+                elif not state.get('preloaded_img'):
+                    yield event.plain_result("请提供图片")
+        event.stop_event()
 
     async def _handle_waiting_image(self, event: AstrMessageEvent, state: dict, user_id: str):
         """
@@ -734,34 +607,23 @@ class ImgRevSearcherPlugin(Star):
         产生:
             处理结果消息
         """
-        try:
-            if self.user_states.is_expired(user_id):
-                yield event.plain_result("等待超时，操作取消")
-                self.user_states.delete_state(user_id)
+        img_urls = self._get_img_urls(event.message_obj)
+        message_text = self._get_message_text(event.message_obj)
+        img_buffer = None
+        if img_urls:
+            img_buffer = await self._download_img(img_urls[0])
+        elif self._is_image_url(message_text):
+            img_buffer = await self._download_img(message_text)
+        if img_buffer:
+            if not img_buffer:
+                yield event.plain_result("图片下载失败，请稍后重试")
+                del self.user_states[user_id]
                 return
-                
-            img_urls = self._get_img_urls(event.message_obj)
-            message_text = self._get_message_text(event.message_obj)
-            img_buffer = None
-            if img_urls:
-                img_buffer = await self._download_img(img_urls[0])
-            elif self._is_image_url(message_text):
-                img_buffer = await self._download_img(message_text)
-            if img_buffer:
-                if not img_buffer:
-                    yield event.plain_result("图片下载失败，请稍后重试")
-                    self.user_states.delete_state(user_id)
-                    return
-                async for result in self._perform_search(event, state["engine"], img_buffer):
-                    yield result
-                event.stop_event()
-            else:
-                yield event.plain_result("请发送一张图片或图片链接")
-        except Exception as e:
-            print(f"处理等待图片时出错: {str(e)}")
-            yield event.plain_result(f"处理消息时出错: {str(e)}，请重新开始搜索")
-            self.user_states.delete_state(user_id)
+            async for result in self._perform_search(event, state["engine"], img_buffer):
+                yield result
             event.stop_event()
+        else:
+            yield event.plain_result("请发送一张图片或图片链接")
 
     async def _handle_initial_search_command(self, event: AstrMessageEvent, user_id: str):
         """
@@ -774,92 +636,88 @@ class ImgRevSearcherPlugin(Star):
         产生:
             处理结果消息
         """
-        try:
-            if not self.available_engines:
-                yield event.plain_result("当前没有可用的搜索引擎，请联系管理员在配置中启用至少一个引擎")
-                event.stop_event()
-                return
-            example_engine = self.available_engines[0]
-            message_text = self._get_message_text(event.message_obj)
-            img_urls = self._get_img_urls(event.message_obj)
-            parts = message_text.strip().split()
-            if self.user_states.has_state(user_id):
-                self.user_states.delete_state(user_id)
-            engine = None
-            url_from_text = None
-            invalid_engine = False
-            disabled_engine = False
-            potential_engine = None
-            if len(parts) > 1:
-                if self._is_image_url(parts[1]):
-                    url_from_text = parts[1]
+        if not self.available_engines:
+            yield event.plain_result("当前没有可用的搜索引擎，请在配置中启用至少一个引擎")
+            event.stop_event()
+            return
+        example_engine = self.available_engines[0]
+        message_text = self._get_message_text(event.message_obj)
+        img_urls = self._get_img_urls(event.message_obj)
+        parts = message_text.strip().split()
+        if user_id in self.user_states:
+            del self.user_states[user_id]
+        engine = None
+        url_from_text = None
+        invalid_engine = False
+        disabled_engine = False
+        potential_engine = None
+        if len(parts) > 1:
+            if self._is_image_url(parts[1]):
+                url_from_text = parts[1]
+            else:
+                potential_engine = parts[1].lower()
+                if potential_engine in self.available_engines:
+                    engine = potential_engine
                 else:
-                    potential_engine = parts[1].lower()
-                    if potential_engine in self.available_engines:
-                        engine = potential_engine
+                    all_engines = ["animetrace", "baidu", "bing", "copyseeker", "ehentai", "google", "saucenao",
+                                   "tineye"]
+                    if potential_engine in all_engines:
+                        disabled_engine = True
                     else:
-                        if potential_engine in self.ALL_ENGINES:
-                            disabled_engine = True
-                        else:
-                            invalid_engine = True
-                    if len(parts) > 2 and self._is_image_url(parts[2]):
-                        url_from_text = parts[2]
-            preloaded_img = None
-            if img_urls:
-                preloaded_img = await self._download_img(img_urls[0])
-            elif url_from_text:
-                preloaded_img = await self._download_img(url_from_text)
-            if disabled_engine:
-                state = {
-                    "step": UserState.WAITING_BOTH,
-                    "timestamp": time.time(),
-                    "preloaded_img": preloaded_img,
-                    "engine": None
-                }
-                self.user_states.set_state(user_id, state)
-                yield event.plain_result(f"引擎 '{potential_engine}' 已被禁用，请在配置中启用或选择其他引擎（如{example_engine}）")
-                async for result in self._send_engine_prompt(event, state):
-                    yield result
-                event.stop_event()
-                return
-            if invalid_engine:
-                state = {
-                    "step": UserState.WAITING_BOTH,
-                    "timestamp": time.time(),
-                    "preloaded_img": preloaded_img,
-                    "engine": None,
-                    "invalid_attempts": 1
-                }
-                self.user_states.set_state(user_id, state)
-                yield event.plain_result(f"引擎 '{potential_engine}' 不存在，请提供有效的引擎名（如{example_engine}）")
-                async for result in self._send_engine_prompt(event, state):
-                    yield result
-                event.stop_event()
-                return
-            if engine and preloaded_img:
-                try:
-                    async for result in self._perform_search(event, engine, preloaded_img):
-                        yield result
-                except Exception as e:
-                    yield event.plain_result(f"搜索失败: {str(e)}")
-                event.stop_event()
-                return
+                        invalid_engine = True
+                if len(parts) > 2 and self._is_image_url(parts[2]):
+                    url_from_text = parts[2]
+        preloaded_img = None
+        if img_urls:
+            preloaded_img = await self._download_img(img_urls[0])
+        elif url_from_text:
+            preloaded_img = await self._download_img(url_from_text)
+        if disabled_engine:
             state = {
-                "step": UserState.WAITING_BOTH,
+                "step": "waiting_both",
                 "timestamp": time.time(),
                 "preloaded_img": preloaded_img,
-                "engine": engine
+                "engine": None
             }
-            self.user_states.set_state(user_id, state)
+            self.user_states[user_id] = state
+            yield event.plain_result(
+                f"引擎 '{potential_engine}' 已被禁用，请在配置中启用或选择其他引擎（如{example_engine}）")
             async for result in self._send_engine_prompt(event, state):
                 yield result
             event.stop_event()
-        except Exception as e:
-            print(f"处理初始搜索命令时出错: {str(e)}")
-            yield event.plain_result(f"处理搜索命令时出错: {str(e)}，请稍后重试")
-            if self.user_states.has_state(user_id):
-                self.user_states.delete_state(user_id)
+            return
+        if invalid_engine:
+            state = {
+                "step": "waiting_both",
+                "timestamp": time.time(),
+                "preloaded_img": preloaded_img,
+                "engine": None,
+                "invalid_attempts": 1
+            }
+            self.user_states[user_id] = state
+            yield event.plain_result(f"引擎 '{potential_engine}' 不存在，请提供有效的引擎名（如{example_engine}）")
+            async for result in self._send_engine_prompt(event, state):
+                yield result
             event.stop_event()
+            return
+        if engine and preloaded_img:
+            try:
+                async for result in self._perform_search(event, engine, preloaded_img):
+                    yield result
+            except Exception as e:
+                yield event.plain_result(f"搜索失败: {str(e)}")
+            event.stop_event()
+            return
+        state = {
+            "step": "waiting_both",
+            "timestamp": time.time(),
+            "preloaded_img": preloaded_img,
+            "engine": engine
+        }
+        self.user_states[user_id] = state
+        async for result in self._send_engine_prompt(event, state):
+            yield result
+        event.stop_event()
 
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def on_message(self, event: AstrMessageEvent):
@@ -878,71 +736,23 @@ class ImgRevSearcherPlugin(Star):
             async for result in self._handle_initial_search_command(event, user_id):
                 yield result
             return
-        if not self.user_states.has_state(user_id):
+        if user_id not in self.user_states:
             return
-        state = self.user_states.get_state(user_id)
-        
-        # 检查state中是否有step字段
-        if 'step' not in state:
-            print(f"警告: 用户 {user_id} 的状态中缺少step字段")
-            self.user_states.delete_state(user_id)
-            yield event.plain_result("处理消息时出错，请重新开始搜索")
-            return
-            
-        if state.get("step") == UserState.WAITING_TEXT_CONFIRM:
+        state = self.user_states[user_id]
+        if state.get("step") == "waiting_text_confirm":
             async for result in self._handle_waiting_text_confirm(event, state, user_id):
                 yield result
             return
-        if self.user_states.is_expired(user_id):
+        if time.time() - state["timestamp"] > 30:
             async for result in self._handle_timeout(event, user_id):
                 yield result
             return
-        if state["step"] == UserState.WAITING_ENGINE:
+        if state["step"] == "waiting_engine":
             async for result in self._handle_waiting_engine(event, state, user_id):
                 yield result
-        elif state["step"] == UserState.WAITING_BOTH:
+        elif state["step"] == "waiting_both":
             async for result in self._handle_waiting_both(event, state, user_id):
                 yield result
-        elif state["step"] == UserState.WAITING_IMAGE:
+        elif state["step"] == "waiting_image":
             async for result in self._handle_waiting_image(event, state, user_id):
                 yield result
-
-    def _draw_rounded_rectangle(self, draw, xy, radius, fill=None, outline=None, width=1):
-        """
-        绘制圆角矩形
-
-        参数:
-            draw: ImageDraw对象
-            xy: 矩形坐标 (x1, y1, x2, y2)
-            radius: 圆角半径
-            fill: 填充颜色
-            outline: 边框颜色
-            width: 边框宽度
-        """
-        x1, y1, x2, y2 = xy
-        diameter = 2 * radius
-        draw.rectangle([x1+radius, y1, x2-radius, y2], fill=fill, outline=outline, width=width)
-        draw.rectangle([x1, y1+radius, x2, y2-radius], fill=fill, outline=outline, width=width)
-        draw.pieslice([x1, y1, x1+diameter, y1+diameter], 180, 270, fill=fill, outline=outline, width=width)
-        draw.pieslice([x2-diameter, y1, x2, y1+diameter], 270, 360, fill=fill, outline=outline, width=width)
-        draw.pieslice([x1, y2-diameter, x1+diameter, y2], 90, 180, fill=fill, outline=outline, width=width)
-        draw.pieslice([x2-diameter, y2-diameter, x2, y2], 0, 90, fill=fill, outline=outline, width=width)
-
-    def _get_text_dimensions(self, draw, text, font):
-        """
-        获取文本尺寸，兼容不同版本PIL
-
-        参数:
-            draw: ImageDraw对象
-            text: 文本内容
-            font: 字体
-
-        返回:
-            (width, height): 文本宽高
-        """
-        if hasattr(draw, 'textlength'):
-            width = draw.textlength(text, font=font)
-            height = font.size * 1.2
-            return (width, height)
-        else:
-            return font.getsize(text)

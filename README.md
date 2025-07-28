@@ -10,7 +10,7 @@
 - 搜索与本项目相关的关键词，找到插件后点击安装
 - 推荐直接用唯一标识符搜索：  
   ```
-  astrbot_plugin_img_rev_seacher
+  astrbot_plugin_img_rev_searcher
   ```
 
 ### 方式二：Github 仓库链接
@@ -18,7 +18,7 @@
 - 打开 **AstrBot WebUI** → **插件管理** → **+ 安装**
 - 在出现的输入框内粘贴以下仓库地址并点击安装：
   ```
-  https://github.com/drdon1234/astrbot_plugin_img_rev_seacher
+  https://github.com/drdon1234/astrbot_plugin_img_rev_searcher
   ```
 
 ### 📦 依赖库安装（重要）

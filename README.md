@@ -114,7 +114,7 @@ pip install <module>
 > 5. 复制完整的 Cookie 内容，替换到 `config.json` 中 `default_cookies` 的 `google_lens` 项
 > 
 > **注意：**  
-> - 有效cookie的充要参数为`NID= `
+> - 有效cookie的充要参数为 `NID= `
 > - 无痕模式cookie有效期限约1天
 > - 登录状态cookie有效期极短，不建议使用
 

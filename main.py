@@ -161,7 +161,7 @@ def get_message_text(message) -> str:
     return ''
 
 
-@register("astrbot_plugin_img_rev_searcher", "drdon1234", "以图搜图，找出处", "2.3")
+@register("astrbot_plugin_img_rev_searcher", "drdon1234", "以图搜图，找出处", "3.1")
 class ImgRevSearcherPlugin(Star):
     """
     以图搜图插件主类

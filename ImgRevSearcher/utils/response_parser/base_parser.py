@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, TypeVar, Optional
 
 T = TypeVar("T")
 
@@ -77,12 +77,12 @@ class BaseSearchResponse(ABC, Generic[T]):
         pass
         
     @abstractmethod
-    def show_result(self) -> str:
+    def show_result(self) -> Optional[str]:
         """
         生成可读的搜索结果文本
         
         返回:
-            str: 格式化的搜索结果文本
+            Optional[str]: 格式化的搜索结果文本，无结果时返回None
             
         异常:
             NotImplementedError: 子类必须实现此方法

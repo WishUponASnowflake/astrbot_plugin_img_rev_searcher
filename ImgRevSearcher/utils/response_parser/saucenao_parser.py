@@ -200,22 +200,28 @@ class SauceNAOResponse(BaseSearchResponse[SauceNAOItem]):
         self.results_returned: Optional[int] = header.get("results_returned")
         self.url: str = f"https://saucenao.com/search.php?url=https://saucenao.com{header.get('query_image_display')}"
 
-    def show_result(self) -> str:
+    def show_result(self) -> Optional[str]:
         """
         生成可读的搜索结果文本
         
         返回:
             str: 格式化的搜索结果文本
         """
+        has_valid_results = False
         if self.raw:
-            result = [f"相似度: {self.raw[0].similarity}%", f"标题: {self.raw[0].title}", f"作者: {self.raw[0].author}",
-                      f"作者链接: {self.raw[0].author_url}", f"作者链接（备用）: {self.raw[0].source}",
-                      f"作品链接: {self.raw[0].url}"]
-            if self.raw[0].ext_urls:
-                result.append("更多相关链接:")
-                for i, url in enumerate(self.raw[0].ext_urls, 1):
-                    result.append(f"  #{i} {url}")
-            else:
-                result.append("更多相关链接: 无")
-            return "\n".join(result)
-        return "未找到匹配结果"
+            for item in self.raw:
+                if item.title or item.url or item.author:
+                    has_valid_results = True
+                    break
+        if not has_valid_results:
+            return None
+        result = [f"相似度: {self.raw[0].similarity}%", f"标题: {self.raw[0].title}", f"作者: {self.raw[0].author}",
+                  f"作者链接: {self.raw[0].author_url}", f"作者链接（备用）: {self.raw[0].source}",
+                  f"作品链接: {self.raw[0].url}"]
+        if self.raw[0].ext_urls:
+            result.append("更多相关链接:")
+            for i, url in enumerate(self.raw[0].ext_urls, 1):
+                result.append(f"  #{i} {url}")
+        else:
+            result.append("更多相关链接: 无")
+        return "\n".join(result)

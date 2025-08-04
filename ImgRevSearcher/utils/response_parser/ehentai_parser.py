@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Optional
 import json
 from pathlib import Path
 from pyquery import PyQuery
@@ -109,7 +109,7 @@ class EHentaiResponse(BaseSearchResponse[EHentaiItem]):
             gl1t_items = data.find(".itg").children(".gl1t").items()
             self.raw = [EHentaiItem(i) for i in gl1t_items]
             
-    def show_result(self, translations_file: str = "resource/translations/ehviewer_translations.json") -> str:
+    def show_result(self, translations_file: str = "resource/translations/ehviewer_translations.json") -> Optional[str]:
         """
         生成可读的搜索结果文本
         
@@ -128,8 +128,14 @@ class EHentaiResponse(BaseSearchResponse[EHentaiItem]):
                 translations = json.load(f)
         except Exception:
             translations = {}
-        if not self.raw:
-            return "未找到匹配结果"
+        has_valid_results = False
+        if self.raw:
+            for item in self.raw:
+                if item.title or item.url or item.tags:
+                    has_valid_results = True
+                    break
+        if not has_valid_results:
+            return None
         categorized_tags = {}
         for tag in self.raw[0].tags:
             if ':' in tag:

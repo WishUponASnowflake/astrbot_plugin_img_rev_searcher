@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Optional
 from typing_extensions import override
 from ..types import DomainInfo
 from .base_parser import BaseResParser, BaseSearchResponse
@@ -85,20 +85,27 @@ class TineyeResponse(BaseSearchResponse[TineyeItem]):
         matches = resp_data["matches"]
         self.raw: list[TineyeItem] = [TineyeItem(i) for i in matches] if matches else []
         
-    def show_result(self) -> str:
+    def show_result(self) -> Optional[str]:
         """
         生成可读的搜索结果文本
         
         返回:
             str: 格式化的搜索结果文本
         """
-        if not self.raw:
-            return "未找到匹配结果"
+        has_valid_results = False
+        if self.raw:
+            for item in self.raw:
+                if item.image_url or item.url:
+                    has_valid_results = True
+                    break
+        if not has_valid_results:
+            return None
         lines = []
         for i, item in enumerate(self.raw, 1):
-            lines.append("-" * 50)
-            lines.append(f"结果 #{i}")
-            lines.append(f"原图链接: {item.image_url}")
-            lines.append(f"来源网页: {item.url}")
+            if item.image_url or item.url:
+                lines.append("-" * 50)
+                lines.append(f"结果 #{i}")
+                lines.append(f"原图链接: {item.image_url}")
+                lines.append(f"来源网页: {item.url}")
         lines.append("-" * 50)
         return "\n".join(lines)

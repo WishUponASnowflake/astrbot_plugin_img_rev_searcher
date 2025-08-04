@@ -1,4 +1,4 @@
-from typing import Any, NamedTuple
+from typing import Any, Optional, NamedTuple
 from typing_extensions import override
 from .base_parser import BaseResParser, BaseSearchResponse
 
@@ -81,16 +81,24 @@ class AnimeTraceResponse(BaseSearchResponse[AnimeTraceItem]):
         results = resp_data["data"]
         self.raw: list[AnimeTraceItem] = [AnimeTraceItem(item) for item in results]
         
-    def show_result(self) -> str:
+    def show_result(self) -> Optional[str]:
         """
         生成可读的搜索结果文本
         
         返回:
             str: 格式化的搜索结果文本
         """
+        has_characters = False
+        if self.raw:
+            for item in self.raw:
+                if item.characters:
+                    has_characters = True
+                    break
+        if not has_characters:
+            return None
         lines = [f"是否为 AI 生成: {'是' if self.ai else '否'}", "-" * 50]
         if self.raw:
-            for i, item in enumerate(self.raw, 1):
+            for _, item in enumerate(self.raw, 1):
                 if characters := item.characters:
                     for j, character in enumerate(characters, 1):
                         lines.append(f"结果 #{j}")

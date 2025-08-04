@@ -318,22 +318,31 @@ class GoogleLensResponse(BaseSearchResponse[GoogleLensItem]):
         self._parse_search_items(html, image_url_map, base64_image_map, max_results)
         self._parse_related_searches(html, image_url_map, base64_image_map)
         
-    def show_result(self) -> str:
+    def show_result(self) -> Optional[str]:
         """
         生成可读的搜索结果文本
         
         返回:
             str: 格式化的搜索结果文本
         """
+        has_valid_results = False
         if self.raw:
-            lines = ["搜索结果:", "-" * 50]
-            for idx, item in enumerate(self.raw, 1):
+            for item in self.raw:
+                if item.title or item.url:
+                    has_valid_results = True
+                    break
+        
+        if not has_valid_results:
+            return None
+            
+        lines = ["搜索结果:", "-" * 50]
+        for idx, item in enumerate(self.raw, 1):
+            if item.title or item.url:
                 lines.append(f"结果 #{idx}")
                 lines.append(f"标题: {item.title}")
                 lines.append(f"链接: {item.url}")
                 lines.append("-" * 50)
-            return "\n".join(lines)
-        return "未找到匹配结果"
+        return "\n".join(lines)
 
 
 class GoogleLensExactMatchesItem(GoogleLensBaseItem):
@@ -448,19 +457,26 @@ class GoogleLensExactMatchesResponse(BaseSearchResponse[GoogleLensExactMatchesIt
         image_url_map, base64_image_map = extract_image_maps(html)
         self.raw = self._parse_search_items(html, image_url_map, base64_image_map, max_results)
         
-    def show_result(self) -> str:
+    def show_result(self) -> Optional[str]:
         """
         生成可读的搜索结果文本
         
         返回:
             str: 格式化的搜索结果文本
         """
+        has_valid_results = False
         if self.raw:
-            lines = ["精确匹配的结果:", "-" * 50]
-            for idx, item in enumerate(self.raw, 1):
+            for item in self.raw:
+                if item.title or item.url:
+                    has_valid_results = True
+                    break
+        if not has_valid_results:
+            return None
+        lines = ["精确匹配的结果:", "-" * 50]
+        for idx, item in enumerate(self.raw, 1):
+            if item.title or item.url:
                 lines.append(f"结果 #{idx}")
                 lines.append(f"标题: {item.title}")
                 lines.append(f"链接: {item.url}")
                 lines.append("-" * 50)
-            return "\n".join(lines)
-        return "未找到精确匹配结果"
+        return "\n".join(lines)

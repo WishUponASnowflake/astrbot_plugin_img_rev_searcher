@@ -1,4 +1,4 @@
-from typing import Any, Callable, Optional
+from typing import Any, Optional, Callable
 from typing_extensions import override
 from .base_parser import BaseResParser, BaseSearchResponse
 
@@ -298,22 +298,35 @@ class BingResponse(BaseSearchResponse[BingItem]):
         if data := action.get("data"):
             self.entities.append(EntityItem(data))
             
-    def show_result(self) -> str:
+    def show_result(self) -> Optional[str]:
         """
         生成可读的搜索结果文本
         
         返回:
             str: 格式化的搜索结果文本
         """
-        lines = ["-" * 50]
         combined = (self.pages_including or []) + (self.visual_search or [])
+        has_valid_combined = False
         if combined:
-            for idx, item in enumerate(combined, 1):
-                lines.append(f"结果 #{idx}")
-                lines.append(f"标题：{item.name}")
-                lines.append(f"页面链接：{item.url}")
-                lines.append(f"图片链接：{item.image_url}")
-                lines.append("-" * 50)
+            for item in combined:
+                if item.name or item.url or item.image_url:
+                    has_valid_combined = True
+                    break
+        
+        has_valid_guess = bool(self.best_guess and self.best_guess.strip())
+        if not has_valid_combined and not has_valid_guess:
+            return None
+        lines = ["-" * 50]
+        if has_valid_combined:
+            result_idx = 1
+            for item in combined:
+                if item.name or item.url or item.image_url:
+                    lines.append(f"结果 #{result_idx}")
+                    lines.append(f"标题：{item.name}")
+                    lines.append(f"页面链接：{item.url}")
+                    lines.append(f"图片链接：{item.image_url}")
+                    lines.append("-" * 50)
+                    result_idx += 1
         if self.best_guess:
             lines.append(f"最佳结果：{self.best_guess}")
             lines.append("-" * 50)

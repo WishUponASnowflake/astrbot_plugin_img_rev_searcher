@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Optional
 from typing_extensions import override
 from ..ext_tools import deep_get
 from .base_parser import BaseResParser, BaseSearchResponse
@@ -70,29 +70,41 @@ class BaiDuResponse(BaseSearchResponse[BaiDuItem]):
         if data_list := deep_get(resp_data, "data.list"):
             self.raw.extend([BaiDuItem(i) for i in data_list])
             
-    def show_result(self) -> str:
+    def show_result(self) -> Optional[str]:
         """
         生成可读的搜索结果文本
         
         返回:
             str: 格式化的搜索结果文本，包含相似结果和最佳匹配
         """
-        lines = []
+        has_valid_exact = False
         if self.exact_matches:
+            for item in self.exact_matches:
+                if item.title or item.url:
+                    has_valid_exact = True
+                    break
+        has_valid_raw = False
+        if self.raw:
+            for item in self.raw:
+                if item.url:
+                    has_valid_raw = True
+                    break
+        if not has_valid_exact and not has_valid_raw:
+            return None
+        lines = []
+        if has_valid_exact:
             lines.extend(["最佳结果:", "-" * 50])
             for idx, item in enumerate(self.exact_matches, 1):
-                lines.append(f"结果 #{idx}")
-                lines.append(f"标题: {item.title}")
-                lines.append(f"链接: {item.url}")
-                lines.append("-" * 50)
-        if self.raw:
+                if item.title or item.url:
+                    lines.append(f"结果 #{idx}")
+                    lines.append(f"标题: {item.title}")
+                    lines.append(f"链接: {item.url}")
+                    lines.append("-" * 50)
+        if has_valid_raw:
             lines.extend(["相关结果:", "-" * 50])
             for idx, item in enumerate(self.raw, 1):
-                lines.append(f"结果 #{idx}")
-                lines.append(f"链接: {item.url}")
-                lines.append("-" * 50)
-        else:
-            lines.append("无相关结果")
-            
-
+                if item.url:
+                    lines.append(f"结果 #{idx}")
+                    lines.append(f"链接: {item.url}")
+                    lines.append("-" * 50)
         return "\n".join(lines)

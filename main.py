@@ -13,12 +13,10 @@ from astrbot.api.message_components import Image as AstrImage, Nodes, Node, Plai
 from astrbot.api.star import Context, Star, register
 from .ImgRevSearcher.model import BaseSearchModel
 
-# 支持的所有图像搜索引擎
 ALL_ENGINES = [
     "animetrace", "baidu", "bing", "copyseeker", "ehentai", "google", "saucenao", "tineye"
 ]
 
-# 各引擎基础信息
 ENGINE_INFO = {
     "animetrace": {"url": "https://www.animetrace.com/", "anime": True},
     "baidu": {"url": "https://graph.baidu.com/", "anime": False},
@@ -30,7 +28,6 @@ ENGINE_INFO = {
     "tineye": {"url": "https://tineye.com/search/", "anime": False}
 }
 
-# 主题配色
 COLOR_THEME = {
     "bg": (255, 255, 255),
     "header_bg": (67, 99, 216),
@@ -303,7 +300,6 @@ class ImgRevSearcherPlugin(Star):
         异常:
             无
         """
-        
         def create_engine_intro_image():
             width = 800
             cell_height = 50
@@ -411,6 +407,9 @@ class ImgRevSearcherPlugin(Star):
         """
         file_bytes = img_buffer.getvalue()
         result_text = await self.search_model.search(api=engine, file=file_bytes)
+        if result_text is None:
+            yield event.plain_result("未找到相关结果")
+            return
         img_buffer.seek(0)
         
         def process_image():
@@ -427,7 +426,6 @@ class ImgRevSearcherPlugin(Star):
         img_bytes = await asyncio.to_thread(process_image)
         async for result in self._send_image(event, img_bytes):
                 yield result
-        
         yield event.plain_result(f"需要文本格式的结果吗？回复\"是\"以获取，{self.text_confirm_timeout}秒内有效")
         user_id = event.get_sender_id()
         self.user_states[user_id] = {
@@ -597,7 +595,6 @@ class ImgRevSearcherPlugin(Star):
         message_text = get_message_text(event.message_obj).lower()
         img_urls = get_img_urls(event.message_obj)
         updated = False
-        
         if message_text and not state.get('engine'):
             if message_text in self.available_engines:
                 state["engine"] = message_text
@@ -626,17 +623,14 @@ class ImgRevSearcherPlugin(Star):
                         yield result
                     event.stop_event()
                     return
-        
         img_buffer = None
         if img_urls:
             img_buffer = await self._download_img(img_urls[0])
         elif is_image_url(message_text):
             img_buffer = await self._download_img(message_text)
-        
         if img_buffer and not state.get('preloaded_img'):
             state["preloaded_img"] = img_buffer
             updated = True
-        
         if state.get("engine") and state.get("preloaded_img"):
             try:
                 async for result in self._perform_search(event, state["engine"], state["preloaded_img"]):
@@ -645,14 +639,12 @@ class ImgRevSearcherPlugin(Star):
                 yield event.plain_result("搜索失败，请重试")
             event.stop_event()
             return
-        
         if updated:
             state["timestamp"] = time.time()
             async for result in self._send_engine_prompt(event, state):
                 yield result
             event.stop_event()
             return
-        
         state["timestamp"] = time.time()
         if not state.get('engine') and not state.get('preloaded_img'):
             yield event.plain_result(f"请提供引擎名（如{example_engine}）和图片")
@@ -660,7 +652,6 @@ class ImgRevSearcherPlugin(Star):
             yield event.plain_result(f"请提供引擎名（如{example_engine}）")
         elif not state.get('preloaded_img'):
             yield event.plain_result("请提供图片")
-        
         event.stop_event()
 
     async def _handle_waiting_image(self, event: AstrMessageEvent, state: dict, user_id: str):
@@ -714,12 +705,10 @@ class ImgRevSearcherPlugin(Star):
         message_text = get_message_text(event.message_obj)
         img_urls = get_img_urls(event.message_obj)
         parts = message_text.strip().split()
-        
         engine = None
         img_buffer = None
         error = None
         url_from_text = None
-        
         if len(parts) > 1:
             if is_image_url(parts[1]):
                 url_from_text = parts[1]
@@ -742,12 +731,10 @@ class ImgRevSearcherPlugin(Star):
                 
                 if len(parts) > 2 and is_image_url(parts[2]):
                     url_from_text = parts[2]
-        
         if img_urls:
             img_buffer = await self._download_img(img_urls[0])
         elif url_from_text:
             img_buffer = await self._download_img(url_from_text)
-        
         return engine, img_buffer, error
 
 
@@ -769,12 +756,9 @@ class ImgRevSearcherPlugin(Star):
             yield event.plain_result("当前没有可用的搜索引擎，请联系管理员在配置中启用至少一个引擎")
             event.stop_event()
             return
-        
         if user_id in self.user_states:
             del self.user_states[user_id]
-        
         engine, img_buffer, error = await self._parse_initial_command(event)
-        
         if error:
             state = {
                 "step": "waiting_both",
@@ -782,17 +766,14 @@ class ImgRevSearcherPlugin(Star):
                 "preloaded_img": img_buffer,
                 "engine": None
             }
-            
             if error['type'] == 'invalid_engine':
-                state["invalid_attempts"] = 1
-                
+                state["invalid_attempts"] = 1  
             self.user_states[user_id] = state
             yield event.plain_result(error['message'])
             async for result in self._send_engine_prompt(event, state):
                 yield result
             event.stop_event()
             return
-        
         if engine and img_buffer:
             try:
                 async for result in self._perform_search(event, engine, img_buffer):
@@ -801,7 +782,6 @@ class ImgRevSearcherPlugin(Star):
                 yield event.plain_result("搜索失败，请重试")
             event.stop_event()
             return
-        
         state = {
             "step": "waiting_both",
             "timestamp": time.time(),

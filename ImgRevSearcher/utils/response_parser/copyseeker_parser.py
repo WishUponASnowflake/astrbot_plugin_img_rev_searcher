@@ -72,19 +72,27 @@ class CopyseekerResponse(BaseSearchResponse[CopyseekerItem]):
         self.raw: list[CopyseekerItem] = [CopyseekerItem(page) for page in resp_data.get("pages", [])]
         self.similar_image_urls: list[str] = resp_data.get("visuallySimilarImages", [])
         
-    def show_result(self) -> str:
+    def show_result(self) -> Optional[str]:
         """
         生成可读的搜索结果文本
         
         返回:
             str: 格式化的搜索结果文本
         """
+        has_valid_raw = False
+        if self.raw:
+            for item in self.raw:
+                if item.url:
+                    has_valid_raw = True
+                    break
+        has_valid_similar = bool(self.similar_image_urls)
+        if not has_valid_raw and not has_valid_similar:
+            return None
         lines = []
         if self.raw:
             lines.append(f"匹配图源：{self.raw[0].url}")
         else:
             lines.append("匹配图源：无")
-            
         lines.append("相似图片：")
         for i, url in enumerate(self.similar_image_urls, 1):
             lines.extend([f"  #{i} {url}", "-" * 50])

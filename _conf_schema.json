@@ -5,6 +5,70 @@
     "hint": "http://host:port，例如：http://127.0.0.1:7890",
     "default": null
   },
+  "available_apis": {
+    "description": "各搜索引擎的启用状态",
+    "type": "object",
+    "items": {
+      "animetrace": {
+        "description": "是否启用AnimeTrace搜索",
+        "type": "bool",
+        "default": true
+      },
+      "baidu": {
+        "description": "是否启用百度搜索",
+        "type": "bool",
+        "default": true
+      },
+      "bing": {
+        "description": "是否启用Bing搜索",
+        "type": "bool",
+        "default": true
+      },
+      "copyseeker": {
+        "description": "是否启用CopySeeker搜索",
+        "type": "bool",
+        "default": false
+      },
+      "ehentai": {
+        "description": "是否启用E-Hentai/ExHentai搜索",
+        "type": "bool",
+        "default": true
+      },
+      "google": {
+        "description": "是否启用Google Lens搜索",
+        "type": "bool",
+        "default": true
+      },
+      "saucenao": {
+        "description": "是否启用SauceNAO搜索",
+        "type": "bool",
+        "default": true
+      },
+      "tineye": {
+        "description": "是否启用TinEye搜索",
+        "type": "bool",
+        "default": true
+      }
+    }
+  },
+  "timeout_settings": {
+    "description": "超时时间设置",
+    "type": "object",
+    "items": {
+      "search_params_timeout": {
+        "description": "等待搜索参数（引擎名、图片等）的超时时间（秒）",
+        "type": "int",
+        "hint": "用户在发送'以图搜图'命令后，等待提供引擎名称和图片的最大时间",
+        "default": 30
+      },
+      "text_confirm_timeout": {
+        "description": "等待确认是否需要文本格式结果的超时时间（秒）",
+        "type": "int",
+        "hint": "搜索完成后，等待用户确认是否需要文本格式结果的最大时间",
+        "default": 30
+      }
+    }
+  },
   "default_params": {
     "description": "各搜索引擎的默认参数",
     "type": "object",
@@ -159,6 +223,25 @@
       }
     }
   },
+  "default_cookies": {
+    "description": "各搜索引擎的默认Cookie",
+    "type": "object",
+    "hint": "部分搜索引擎需要Cookie来获取更好的搜索结果",
+    "items": {
+      "ehentai": {
+        "description": "EHentai的Cookie",
+        "type": "string",
+        "hint": "格式如: ipb_member_id=; ipb_pass_hash=; igneous=，ExHentai搜索必须提供有效Cookie",
+        "default": null
+      },
+      "google": {
+        "description": "Google的Cookie",
+        "type": "string",
+        "hint": "无痕模式Cookie有效期约1天，建议不要使用登录状态的Cookie",
+        "default": null
+      }
+    }
+  },
   "auto_google_cookie": {
     "description": "Google Lens Cookie 自动获取设置",
     "type": "object",
@@ -183,89 +266,6 @@
         "description": "Cookie 更新间隔（秒）",
         "type": "int",
         "default": 43200
-      }
-    }
-  },
-  "default_cookies": {
-    "description": "各搜索引擎的默认Cookie",
-    "type": "object",
-    "hint": "部分搜索引擎需要Cookie来获取更好的搜索结果",
-    "items": {
-      "ehentai": {
-        "description": "EHentai的Cookie",
-        "type": "string",
-        "hint": "格式如: ipb_member_id=; ipb_pass_hash=; igneous=，ExHentai搜索必须提供有效Cookie",
-        "default": null
-      },
-      "google": {
-        "description": "Google的Cookie",
-        "type": "string",
-        "hint": "无痕模式Cookie有效期约1天，建议不要使用登录状态的Cookie",
-        "default": null
-      }
-    }
-  },
-  "available_apis": {
-    "description": "各搜索引擎的启用状态",
-    "type": "object",
-    "items": {
-      "animetrace": {
-        "description": "是否启用AnimeTrace搜索",
-        "type": "bool",
-        "default": true
-      },
-      "baidu": {
-        "description": "是否启用百度搜索",
-        "type": "bool",
-        "default": true
-      },
-      "bing": {
-        "description": "是否启用Bing搜索",
-        "type": "bool",
-        "default": true
-      },
-      "copyseeker": {
-        "description": "是否启用CopySeeker搜索",
-        "type": "bool",
-        "default": false
-      },
-      "ehentai": {
-        "description": "是否启用E-Hentai/ExHentai搜索",
-        "type": "bool",
-        "default": true
-      },
-      "google": {
-        "description": "是否启用Google Lens搜索",
-        "type": "bool",
-        "default": true
-      },
-      "saucenao": {
-        "description": "是否启用SauceNAO搜索",
-        "type": "bool",
-        "default": true
-      },
-      "tineye": {
-        "description": "是否启用TinEye搜索",
-        "type": "bool",
-        "default": true
-      }
-    }
-  },
-  "timeout_settings": {
-    "description": "超时时间设置",
-    "type": "object",
-    "items": {
-      "search_params_timeout": {
-        "description": "等待搜索参数（引擎名、图片等）的超时时间（秒）",
-        "type": "int",
-        "hint": "用户在发送'以图搜图'命令后，等待提供引擎名称和图片的最大时间",
-        "default": 30
-      },
-      "text_confirm_timeout": {
-        "description": "等待确认是否需要文本格式结果的超时时间（秒）",
-        "type": "int",
-        "hint": "搜索完成后，等待用户确认是否需要文本格式结果的最大时间",
-        "default": 30
       }
     }
   }

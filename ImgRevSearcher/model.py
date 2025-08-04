@@ -162,7 +162,7 @@ class BaseSearchModel:
         return await asyncio.to_thread(convert_image)
 
     async def search(self, api: str, file: FileContent = None,
-                     url: Optional[str] = None, **kwargs: Any) -> str:
+                     url: Optional[str] = None, **kwargs: Any) -> Optional[str]:
         """
         执行图像反向搜索
 
@@ -173,7 +173,7 @@ class BaseSearchModel:
             **kwargs: 其他搜索参数
 
         返回:
-            str: 搜索结果文本
+            Optional[str]: 搜索结果文本，搜索失败时返回None
 
         异常:
             ValueError: 当API不支持或参数错误时抛出
@@ -217,8 +217,8 @@ class BaseSearchModel:
                 else:
                     response = await engine_instance.search(file=file, url=url, **search_params)
                 return response.show_result()
-        except Exception as e:
-            return self._format_error(api, str(e))
+        except Exception:
+            return None
 
     async def search_and_print(self, api: str, file: FileContent = None,
                                url: Optional[str] = None, **kwargs: Any) -> None:

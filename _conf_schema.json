@@ -250,5 +250,23 @@
         "default": true
       }
     }
+  },
+  "timeout_settings": {
+    "description": "超时时间设置",
+    "type": "object",
+    "items": {
+      "search_params_timeout": {
+        "description": "等待搜索参数（引擎名、图片等）的超时时间（秒）",
+        "type": "int",
+        "hint": "用户在发送'以图搜图'命令后，等待提供引擎名称和图片的最大时间",
+        "default": 30
+      },
+      "text_confirm_timeout": {
+        "description": "等待确认是否需要文本格式结果的超时时间（秒）",
+        "type": "int",
+        "hint": "搜索完成后，等待用户确认是否需要文本格式结果的最大时间",
+        "default": 30
+      }
+    }
   }
 } 

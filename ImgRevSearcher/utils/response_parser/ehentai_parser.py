@@ -126,9 +126,8 @@ class EHentaiResponse(BaseSearchResponse[EHentaiItem]):
             abs_translations_file = base_dir / translations_file
             with open(abs_translations_file, 'r', encoding='utf-8') as f:
                 translations = json.load(f)
-        except Exception as e:
+        except Exception:
             translations = {}
-            print(f"加载翻译文件失败: {e}")
         if not self.raw:
             return "未找到匹配结果"
         categorized_tags = {}

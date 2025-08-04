@@ -54,8 +54,8 @@ def extract_ldi_images(script_text: str, image_url_map: dict[str, str]) -> None:
         for key, value in ldi_dict.items():
             if key.startswith("dimg_"):
                 image_url_map[key] = value.replace("\\u003d", "=").replace("\\u0026", "&")
-    except (SyntaxError, ValueError) as e:
-        print(f"Error parsing google.ldi JSON: {e}")
+    except (SyntaxError, ValueError):
+        pass
 
 
 def extract_base64_images(script_text: str, base64_image_map: dict[str, str]) -> None:

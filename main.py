@@ -168,6 +168,8 @@ class ImgRevSearcherPlugin(Star):
             user_states: 用户状态字典
             cleanup_task: 用户超时定时清理协程
             available_engines: 实际启用的引擎列表
+            search_params_timeout: 等待搜索参数的超时时间（秒）
+            text_confirm_timeout: 等待文本格式确认的超时时间（秒）
             search_model: 搜索执行模型
             state_handlers: 状态处理器方法字典
 
@@ -183,6 +185,9 @@ class ImgRevSearcherPlugin(Star):
         self.cleanup_task = asyncio.create_task(self.cleanup_loop())
         available_apis_config = config.get("available_apis", {})
         self.available_engines = [e for e in ALL_ENGINES if available_apis_config.get(e, True)]
+        timeout_settings = config.get("timeout_settings", {})
+        self.search_params_timeout = timeout_settings.get("search_params_timeout", 30)
+        self.text_confirm_timeout = timeout_settings.get("text_confirm_timeout", 30)
         self.search_model = BaseSearchModel(
             proxies=config.get("proxies", ""),
             timeout=60,
@@ -209,7 +214,7 @@ class ImgRevSearcherPlugin(Star):
             now = time.time()
             to_delete = [
                 user_id for user_id, state in list(self.user_states.items())
-                if now - state['timestamp'] > 30
+                if now - state['timestamp'] > self.search_params_timeout
             ]
             for user_id in to_delete:
                 del self.user_states[user_id]
@@ -298,90 +303,95 @@ class ImgRevSearcherPlugin(Star):
         异常:
             无
         """
-        width = 800
-        cell_height = 50
-        header_height = 60
-        title_height = 70
-        table_height = header_height + cell_height * len(self.available_engines)
-        height = title_height + table_height + 25
-        border_width = 2
         
-        def rounded_rectangle(draw, xy, radius, fill=None, outline=None, width=1):
-            x1, y1, x2, y2 = xy
-            diameter = 2 * radius
-            draw.rectangle([x1 + radius, y1, x2 - radius, y2], fill=fill, outline=outline, width=width)
-            draw.rectangle([x1, y1 + radius, x2, y2 - radius], fill=fill, outline=outline, width=width)
-            draw.pieslice([x1, y1, x1 + diameter, y1 + diameter], 180, 270, fill=fill, outline=outline, width=width)
-            draw.pieslice([x2 - diameter, y1, x2, y1 + diameter], 270, 360, fill=fill, outline=outline, width=width)
-            draw.pieslice([x1, y2 - diameter, x1 + diameter, y2], 90, 180, fill=fill, outline=outline, width=width)
-            draw.pieslice([x2 - diameter, y2 - diameter, x2, y2], 0, 90, fill=fill, outline=outline, width=width)
+        def create_engine_intro_image():
+            width = 800
+            cell_height = 50
+            header_height = 60
+            title_height = 70
+            table_height = header_height + cell_height * len(self.available_engines)
+            height = title_height + table_height + 25
+            border_width = 2
+            
+            def rounded_rectangle(draw, xy, radius, fill=None, outline=None, width=1):
+                x1, y1, x2, y2 = xy
+                diameter = 2 * radius
+                draw.rectangle([x1 + radius, y1, x2 - radius, y2], fill=fill, outline=outline, width=width)
+                draw.rectangle([x1, y1 + radius, x2, y2 - radius], fill=fill, outline=outline, width=width)
+                draw.pieslice([x1, y1, x1 + diameter, y1 + diameter], 180, 270, fill=fill, outline=outline, width=width)
+                draw.pieslice([x2 - diameter, y1, x2, y1 + diameter], 270, 360, fill=fill, outline=outline, width=width)
+                draw.pieslice([x1, y2 - diameter, x1 + diameter, y2], 90, 180, fill=fill, outline=outline, width=width)
+                draw.pieslice([x2 - diameter, y2 - diameter, x2, y2], 0, 90, fill=fill, outline=outline, width=width)
 
-        img = Image.new('RGB', (width, height), COLOR_THEME["bg"])
-        draw = ImageDraw.Draw(img)
-        workspace_root = Path(__file__).parent
-        try:
-            font_path = str(workspace_root / "ImgRevSearcher/resource/font/arialuni.ttf")
-            title_font = ImageFont.truetype(font_path, 24)
-            header_font = ImageFont.truetype(font_path, 18)
-            body_font = ImageFont.truetype(font_path, 16)
-        except Exception:
-            title_font = ImageFont.load_default()
-            header_font = ImageFont.load_default()
-            body_font = ImageFont.load_default()
-        rounded_rectangle(draw, [20, 15, width - 20, title_height - 5], 10, fill=COLOR_THEME["header_bg"])
-        title = "可用搜索引擎"
-        title_width = draw.textlength(title, font=title_font) if hasattr(draw, 'textlength') else title_font.getsize(title)[0]
-        title_x = (width - title_width) // 2
-        draw.text((title_x, 25), title, font=title_font, fill=COLOR_THEME["header_text"])
-        table_x = 20
-        table_width = width - 40
-        col_widths = [int(table_width * 0.20), int(table_width * 0.50), int(table_width * 0.30)]
-        table_y = title_height + 10
-        table_bottom = table_y + header_height + cell_height * len(self.available_engines)
-        draw.rectangle([table_x, table_y, table_x + sum(col_widths), table_y + header_height], fill=COLOR_THEME["table_header"])
-        y = table_y + header_height
-        for idx, engine in enumerate(self.available_engines):
-            if engine not in ENGINE_INFO:
-                continue
-            row_bg = COLOR_THEME["cell_bg_even"] if idx % 2 == 0 else COLOR_THEME["cell_bg_odd"]
-            draw.rectangle([table_x, y, table_x + sum(col_widths), y + cell_height], fill=row_bg)
-            y += cell_height
-        headers = ["引擎", "网址", "二次元图片专用"]
-        x = table_x
-        for i, header in enumerate(headers):
-            text_width = draw.textlength(header, font=header_font) if hasattr(draw, 'textlength') else header_font.getsize(header)[0]
-            text_x = x + (col_widths[i] - text_width) // 2
-            draw.text((text_x, table_y + (header_height - 18) // 2), header, font=header_font, fill=COLOR_THEME["text"])
-            x += col_widths[i]
-        y = table_y + header_height
-        for idx, engine in enumerate(self.available_engines):
-            if engine not in ENGINE_INFO:
-                continue
-            info = ENGINE_INFO[engine]
+            img = Image.new('RGB', (width, height), COLOR_THEME["bg"])
+            draw = ImageDraw.Draw(img)
+            workspace_root = Path(__file__).parent
+            try:
+                font_path = str(workspace_root / "ImgRevSearcher/resource/font/arialuni.ttf")
+                title_font = ImageFont.truetype(font_path, 24)
+                header_font = ImageFont.truetype(font_path, 18)
+                body_font = ImageFont.truetype(font_path, 16)
+            except Exception:
+                title_font = ImageFont.load_default()
+                header_font = ImageFont.load_default()
+                body_font = ImageFont.load_default()
+            rounded_rectangle(draw, [20, 15, width - 20, title_height - 5], 10, fill=COLOR_THEME["header_bg"])
+            title = "可用搜索引擎"
+            title_width = draw.textlength(title, font=title_font) if hasattr(draw, 'textlength') else title_font.getsize(title)[0]
+            title_x = (width - title_width) // 2
+            draw.text((title_x, 25), title, font=title_font, fill=COLOR_THEME["header_text"])
+            table_x = 20
+            table_width = width - 40
+            col_widths = [int(table_width * 0.20), int(table_width * 0.50), int(table_width * 0.30)]
+            table_y = title_height + 10
+            table_bottom = table_y + header_height + cell_height * len(self.available_engines)
+            draw.rectangle([table_x, table_y, table_x + sum(col_widths), table_y + header_height], fill=COLOR_THEME["table_header"])
+            y = table_y + header_height
+            for idx, engine in enumerate(self.available_engines):
+                if engine not in ENGINE_INFO:
+                    continue
+                row_bg = COLOR_THEME["cell_bg_even"] if idx % 2 == 0 else COLOR_THEME["cell_bg_odd"]
+                draw.rectangle([table_x, y, table_x + sum(col_widths), y + cell_height], fill=row_bg)
+                y += cell_height
+            headers = ["引擎", "网址", "二次元图片专用"]
             x = table_x
-            draw.text((x + 15, y + (cell_height - 16) // 2), engine, font=body_font, fill=COLOR_THEME["text"])
-            x += col_widths[0]
-            draw.text((x + 15, y + (cell_height - 16) // 2), info["url"], font=body_font, fill=COLOR_THEME["url"])
-            x += col_widths[1]
-            mark = "✓" if info["anime"] else "✗"
-            mark_color = COLOR_THEME["success"] if info["anime"] else COLOR_THEME["fail"]
-            mark_width = draw.textlength(mark, font=header_font) if hasattr(draw, 'textlength') else header_font.getsize(mark)[0]
-            draw.text((x + (col_widths[2] - mark_width) // 2, y + (cell_height - 18) // 2), mark, font=header_font, fill=mark_color)
-            y += cell_height
-        draw.rectangle([table_x, table_y, table_x + sum(col_widths), table_bottom], outline=COLOR_THEME["border"], width=border_width)
-        for i in range(1, len(self.available_engines) + 1):
-            line_y = table_y + header_height + cell_height * i
-            if i < len(self.available_engines):
-                draw.line([(table_x, line_y), (table_x + sum(col_widths), line_y)], fill=COLOR_THEME["border"], width=border_width)
-        draw.line([(table_x, table_y + header_height), (table_x + sum(col_widths), table_y + header_height)], fill=COLOR_THEME["border"], width=border_width)
-        col_x = table_x
-        for i in range(len(col_widths) - 1):
-            col_x += col_widths[i]
-            draw.line([(col_x, table_y), (col_x, table_bottom)], fill=COLOR_THEME["border"], width=border_width)
-        with io.BytesIO() as output:
+            for i, header in enumerate(headers):
+                text_width = draw.textlength(header, font=header_font) if hasattr(draw, 'textlength') else header_font.getsize(header)[0]
+                text_x = x + (col_widths[i] - text_width) // 2
+                draw.text((text_x, table_y + (header_height - 18) // 2), header, font=header_font, fill=COLOR_THEME["text"])
+                x += col_widths[i]
+            y = table_y + header_height
+            for idx, engine in enumerate(self.available_engines):
+                if engine not in ENGINE_INFO:
+                    continue
+                info = ENGINE_INFO[engine]
+                x = table_x
+                draw.text((x + 15, y + (cell_height - 16) // 2), engine, font=body_font, fill=COLOR_THEME["text"])
+                x += col_widths[0]
+                draw.text((x + 15, y + (cell_height - 16) // 2), info["url"], font=body_font, fill=COLOR_THEME["url"])
+                x += col_widths[1]
+                mark = "✓" if info["anime"] else "✗"
+                mark_color = COLOR_THEME["success"] if info["anime"] else COLOR_THEME["fail"]
+                mark_width = draw.textlength(mark, font=header_font) if hasattr(draw, 'textlength') else header_font.getsize(mark)[0]
+                draw.text((x + (col_widths[2] - mark_width) // 2, y + (cell_height - 18) // 2), mark, font=header_font, fill=mark_color)
+                y += cell_height
+            draw.rectangle([table_x, table_y, table_x + sum(col_widths), table_bottom], outline=COLOR_THEME["border"], width=border_width)
+            for i in range(1, len(self.available_engines) + 1):
+                line_y = table_y + header_height + cell_height * i
+                if i < len(self.available_engines):
+                    draw.line([(table_x, line_y), (table_x + sum(col_widths), line_y)], fill=COLOR_THEME["border"], width=border_width)
+            draw.line([(table_x, table_y + header_height), (table_x + sum(col_widths), table_y + header_height)], fill=COLOR_THEME["border"], width=border_width)
+            col_x = table_x
+            for i in range(len(col_widths) - 1):
+                col_x += col_widths[i]
+                draw.line([(col_x, table_y), (col_x, table_bottom)], fill=COLOR_THEME["border"], width=border_width)
+            output = io.BytesIO()
             img.save(output, format="JPEG", quality=85)
             output.seek(0)
-            async for result in self._send_image(event, output.getvalue()):
+            return output.getvalue()
+        
+        img_bytes = await asyncio.to_thread(create_engine_intro_image)
+        async for result in self._send_image(event, img_bytes):
                 yield result
 
     async def _perform_search(self, event: AstrMessageEvent, engine: str, img_buffer: io.BytesIO):
@@ -402,17 +412,23 @@ class ImgRevSearcherPlugin(Star):
         file_bytes = img_buffer.getvalue()
         result_text = await self.search_model.search(api=engine, file=file_bytes)
         img_buffer.seek(0)
-        try:
-            source_image = Image.open(img_buffer)
-            result_img = self.search_model.draw_results(engine, result_text, source_image)
-        except Exception as e:
-            result_img = self.search_model.draw_error(engine, str(e))
-        with io.BytesIO() as output:
+        
+        def process_image():
+            try:
+                source_image = Image.open(img_buffer)
+                result_img = self.search_model.draw_results(engine, result_text, source_image)
+            except Exception as e:
+                result_img = self.search_model.draw_error(engine, str(e))
+            output = io.BytesIO()
             result_img.save(output, format="JPEG", quality=85)
             output.seek(0)
-            async for result in self._send_image(event, output.getvalue()):
+            return output.getvalue()
+        
+        img_bytes = await asyncio.to_thread(process_image)
+        async for result in self._send_image(event, img_bytes):
                 yield result
-        yield event.plain_result("需要文本格式的结果吗？回复\"是\"以获取，10秒内有效")
+        
+        yield event.plain_result(f"需要文本格式的结果吗？回复\"是\"以获取，{self.text_confirm_timeout}秒内有效")
         user_id = event.get_sender_id()
         self.user_states[user_id] = {
             "step": "waiting_text_confirm",
@@ -442,11 +458,11 @@ class ImgRevSearcherPlugin(Star):
             async for result in self._send_engine_intro(event):
                 yield result
         if state.get('preloaded_img'):
-            yield event.plain_result(f"图片已接收，请回复引擎名（如{example_engine}），30秒内有效")
+            yield event.plain_result(f"图片已接收，请回复引擎名（如{example_engine}），{self.search_params_timeout}秒内有效")
         elif state.get('engine'):
-            yield event.plain_result(f"已选择引擎: {state['engine']}，请发送图片或图片URL，30秒内有效")
+            yield event.plain_result(f"已选择引擎: {state['engine']}，请发送图片或图片URL，{self.search_params_timeout}秒内有效")
         else:
-            yield event.plain_result(f"请选择引擎（回复引擎名，如{example_engine}）并发送图片，30秒内有效")
+            yield event.plain_result(f"请选择引擎（回复引擎名，如{example_engine}）并发送图片，{self.search_params_timeout}秒内有效")
 
     async def _handle_timeout(self, event: AstrMessageEvent, user_id: str):
         """
@@ -483,7 +499,7 @@ class ImgRevSearcherPlugin(Star):
             无
         """
         message_text = get_message_text(event.message_obj)
-        if time.time() - state["timestamp"] > 10:
+        if time.time() - state["timestamp"] > self.text_confirm_timeout:
             del self.user_states[user_id]
             event.stop_event()
             return
@@ -494,7 +510,7 @@ class ImgRevSearcherPlugin(Star):
             try:
                 sender_id = int(sender_id)
             except Exception:
-                sender_id = 10000
+                pass
             for i, part in enumerate(text_parts):
                 node = Node(
                     name=sender_name,
@@ -537,12 +553,12 @@ class ImgRevSearcherPlugin(Star):
                 try:
                     async for result in self._perform_search(event, state["engine"], state["preloaded_img"]):
                         yield result
-                except Exception as e:
-                    yield event.plain_result(f"搜索失败: {str(e)}")
+                except Exception:
+                    yield event.plain_result("搜索失败，请重试")
             else:
                 state["step"] = "waiting_image"
                 state["timestamp"] = time.time()
-                yield event.plain_result(f"已选择引擎: {message_text}，请在30秒内发送一张图片，我会进行搜索")
+                yield event.plain_result(f"已选择引擎: {message_text}，请在{self.search_params_timeout}秒内发送一张图片，我会进行搜索")
         else:
             if message_text in ALL_ENGINES and message_text not in self.available_engines:
                 yield event.plain_result(f"引擎 '{message_text}' 已被禁用，请联系管理员在配置中启用或选择其他引擎（如{example_engine}）")
@@ -577,64 +593,75 @@ class ImgRevSearcherPlugin(Star):
         异常:
             无
         """
-        example_engine = self.available_engines[0]
-        updated = False
+        example_engine = self.available_engines[0] if self.available_engines else None
         message_text = get_message_text(event.message_obj).lower()
         img_urls = get_img_urls(event.message_obj)
-        if message_text and message_text in self.available_engines and not state.get('engine'):
-            state["engine"] = message_text
-            updated = True
+        updated = False
+        
+        if message_text and not state.get('engine'):
+            if message_text in self.available_engines:
+                state["engine"] = message_text
+                updated = True
+            elif message_text in ALL_ENGINES:
+                yield event.plain_result(
+                    f"引擎 '{message_text}' 已被禁用，请联系管理员在配置中启用或选择其他引擎（如{example_engine}）"
+                )
+                async for result in self._send_engine_prompt(event, state):
+                    yield result
+                event.stop_event()
+                return
+            elif not is_image_url(message_text):
+                state.setdefault("invalid_attempts", 0)
+                state["invalid_attempts"] += 1
+                if state["invalid_attempts"] >= 2:
+                    yield event.plain_result("连续两次输入错误的引擎名，已取消操作")
+                    del self.user_states[user_id]
+                    event.stop_event()
+                    return
+                else:
+                    yield event.plain_result(
+                        f"引擎 '{message_text}' 不存在，请回复有效的引擎名（如{example_engine}）"
+                    )
+                    async for result in self._send_engine_prompt(event, state):
+                        yield result
+                    event.stop_event()
+                    return
+        
         img_buffer = None
         if img_urls:
             img_buffer = await self._download_img(img_urls[0])
         elif is_image_url(message_text):
             img_buffer = await self._download_img(message_text)
+        
         if img_buffer and not state.get('preloaded_img'):
             state["preloaded_img"] = img_buffer
             updated = True
+        
         if state.get("engine") and state.get("preloaded_img"):
             try:
                 async for result in self._perform_search(event, state["engine"], state["preloaded_img"]):
                     yield result
-            except Exception as e:
-                yield event.plain_result(f"搜索失败: {str(e)}")
+            except Exception:
+                yield event.plain_result("搜索失败，请重试")
             event.stop_event()
             return
+        
         if updated:
             state["timestamp"] = time.time()
             async for result in self._send_engine_prompt(event, state):
                 yield result
             event.stop_event()
-        else:
-            state["timestamp"] = time.time()
-            is_invalid_engine_attempt = message_text and not is_image_url(message_text) and not state.get('engine')
-            if is_invalid_engine_attempt:
-                if message_text in ALL_ENGINES and message_text not in self.available_engines:
-                    yield event.plain_result(
-                        f"引擎 '{message_text}' 已被禁用，请联系管理员在配置中启用或选择其他引擎（如{example_engine}）"
-                    )
-                    async for result in self._send_engine_prompt(event, state):
-                        yield result
-                else:
-                    state.setdefault("invalid_attempts", 0)
-                    state["invalid_attempts"] += 1
-                    if state["invalid_attempts"] >= 2:
-                        yield event.plain_result("连续两次输入错误的引擎名，已取消操作")
-                        del self.user_states[user_id]
-                    else:
-                        yield event.plain_result(
-                            f"引擎 '{message_text}' 不存在，请回复有效的引擎名（如{example_engine}）"
-                        )
-                        async for result in self._send_engine_prompt(event, state):
-                            yield result
-            else:
-                if not state.get('engine') and not state.get('preloaded_img'):
-                    yield event.plain_result(f"请提供引擎名（如{example_engine}）和图片")
-                elif not state.get('engine'):
-                    yield event.plain_result(f"请提供引擎名（如{example_engine}）")
-                elif not state.get('preloaded_img'):
-                    yield event.plain_result("请提供图片")
-            event.stop_event()
+            return
+        
+        state["timestamp"] = time.time()
+        if not state.get('engine') and not state.get('preloaded_img'):
+            yield event.plain_result(f"请提供引擎名（如{example_engine}）和图片")
+        elif not state.get('engine'):
+            yield event.plain_result(f"请提供引擎名（如{example_engine}）")
+        elif not state.get('preloaded_img'):
+            yield event.plain_result("请提供图片")
+        
+        event.stop_event()
 
     async def _handle_waiting_image(self, event: AstrMessageEvent, state: dict, user_id: str):
         """
@@ -665,6 +692,65 @@ class ImgRevSearcherPlugin(Star):
         else:
             yield event.plain_result("请发送一张图片或图片链接")
 
+    async def _parse_initial_command(self, event: AstrMessageEvent):
+        """
+        解析初始搜索命令中的引擎名称和图片
+
+        参数:
+            event: 消息事件对象
+
+        返回:
+            tuple: (引擎名称或None, 图片缓冲区或None, 错误信息字典或None)
+                - 引擎名称: 有效的引擎名称或None
+                - 图片缓冲区: 图片数据的BytesIO对象或None
+                - 错误信息: 包含错误类型和相关信息的字典或None
+                    {
+                        'type': 'invalid_engine' | 'disabled_engine',
+                        'engine_name': 输入的引擎名称,
+                        'message': 错误提示消息
+                    }
+        """
+        example_engine = self.available_engines[0] if self.available_engines else None
+        message_text = get_message_text(event.message_obj)
+        img_urls = get_img_urls(event.message_obj)
+        parts = message_text.strip().split()
+        
+        engine = None
+        img_buffer = None
+        error = None
+        url_from_text = None
+        
+        if len(parts) > 1:
+            if is_image_url(parts[1]):
+                url_from_text = parts[1]
+            else:
+                potential_engine = parts[1].lower()
+                if potential_engine in self.available_engines:
+                    engine = potential_engine
+                elif potential_engine in ALL_ENGINES:
+                    error = {
+                        'type': 'disabled_engine',
+                        'engine_name': potential_engine,
+                        'message': f"引擎 '{potential_engine}' 已被禁用，请联系管理员在配置中启用或选择其他引擎（如{example_engine}）"
+                    }
+                else:
+                    error = {
+                        'type': 'invalid_engine',
+                        'engine_name': potential_engine,
+                        'message': f"引擎 '{potential_engine}' 不存在，请提供有效的引擎名（如{example_engine}）"
+                    }
+                
+                if len(parts) > 2 and is_image_url(parts[2]):
+                    url_from_text = parts[2]
+        
+        if img_urls:
+            img_buffer = await self._download_img(img_urls[0])
+        elif url_from_text:
+            img_buffer = await self._download_img(url_from_text)
+        
+        return engine, img_buffer, error
+
+
     async def _handle_initial_search_command(self, event: AstrMessageEvent, user_id: str):
         """
         处理最初 "以图搜图" 命令自动分流与预处理
@@ -683,76 +769,43 @@ class ImgRevSearcherPlugin(Star):
             yield event.plain_result("当前没有可用的搜索引擎，请联系管理员在配置中启用至少一个引擎")
             event.stop_event()
             return
-        example_engine = self.available_engines[0]
-        message_text = get_message_text(event.message_obj)
-        img_urls = get_img_urls(event.message_obj)
-        parts = message_text.strip().split()
+        
         if user_id in self.user_states:
             del self.user_states[user_id]
-        engine = None
-        url_from_text = None
-        invalid_engine = False
-        disabled_engine = False
-        potential_engine = None
-        if len(parts) > 1:
-            if is_image_url(parts[1]):
-                url_from_text = parts[1]
-            else:
-                potential_engine = parts[1].lower()
-                if potential_engine in self.available_engines:
-                    engine = potential_engine
-                elif potential_engine in ALL_ENGINES:
-                    disabled_engine = True
-                else:
-                    invalid_engine = True
-                if len(parts) > 2 and is_image_url(parts[2]):
-                    url_from_text = parts[2]
-        preloaded_img = None
-        if img_urls:
-            preloaded_img = await self._download_img(img_urls[0])
-        elif url_from_text:
-            preloaded_img = await self._download_img(url_from_text)
-        if disabled_engine:
+        
+        engine, img_buffer, error = await self._parse_initial_command(event)
+        
+        if error:
             state = {
                 "step": "waiting_both",
                 "timestamp": time.time(),
-                "preloaded_img": preloaded_img,
+                "preloaded_img": img_buffer,
                 "engine": None
             }
+            
+            if error['type'] == 'invalid_engine':
+                state["invalid_attempts"] = 1
+                
             self.user_states[user_id] = state
-            yield event.plain_result(
-                f"引擎 '{potential_engine}' 已被禁用，请联系管理员在配置中启用或选择其他引擎（如{example_engine}）")
+            yield event.plain_result(error['message'])
             async for result in self._send_engine_prompt(event, state):
                 yield result
             event.stop_event()
             return
-        if invalid_engine:
-            state = {
-                "step": "waiting_both",
-                "timestamp": time.time(),
-                "preloaded_img": preloaded_img,
-                "engine": None,
-                "invalid_attempts": 1
-            }
-            self.user_states[user_id] = state
-            yield event.plain_result(
-                f"引擎 '{potential_engine}' 不存在，请提供有效的引擎名（如{example_engine}）")
-            async for result in self._send_engine_prompt(event, state):
-                yield result
-            event.stop_event()
-            return
-        if engine and preloaded_img:
+        
+        if engine and img_buffer:
             try:
-                async for result in self._perform_search(event, engine, preloaded_img):
+                async for result in self._perform_search(event, engine, img_buffer):
                     yield result
-            except Exception as e:
-                yield event.plain_result(f"搜索失败: {str(e)}")
+            except Exception:
+                yield event.plain_result("搜索失败，请重试")
             event.stop_event()
             return
+        
         state = {
             "step": "waiting_both",
             "timestamp": time.time(),
-            "preloaded_img": preloaded_img,
+            "preloaded_img": img_buffer,
             "engine": engine
         }
         self.user_states[user_id] = state
@@ -783,11 +836,11 @@ class ImgRevSearcherPlugin(Star):
         state = self.user_states.get(user_id)
         if not state:
             return
-        if state.get("step") == "waiting_text_confirm" and time.time() - state["timestamp"] > 10:
+        if state.get("step") == "waiting_text_confirm" and time.time() - state["timestamp"] > self.text_confirm_timeout:
             del self.user_states[user_id]
             event.stop_event()
             return
-        if time.time() - state["timestamp"] > 30:
+        if time.time() - state["timestamp"] > self.search_params_timeout:
             async for result in self._handle_timeout(event, user_id):
                 yield result
             return

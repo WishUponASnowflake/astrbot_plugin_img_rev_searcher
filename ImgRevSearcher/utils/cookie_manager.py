@@ -1,10 +1,10 @@
-import sys
 from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
+
 
 class GoogleImagesCookieExtractor:
     def __init__(self, remote_addr=None, headless=True, timeout=30):
@@ -59,9 +59,8 @@ class GoogleImagesCookieExtractor:
                 pass
             self.driver.execute_cdp_cmd('Network.enable', {})
             self.driver.execute_cdp_cmd('Network.setExtraHTTPHeaders', {'headers': self.extra_headers})
-        except Exception as e:
-            print(f"初始化 WebDriver 失败: {e}")
-            sys.exit(1)
+        except Exception:
+            return None
 
     def wait_page_ready(self):
         try:
@@ -102,3 +101,4 @@ class GoogleImagesCookieExtractor:
             now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
             return {"time": now, "cookie": cookie}
         return None 
+        

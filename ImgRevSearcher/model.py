@@ -112,13 +112,15 @@ class BaseSearchModel:
             headless=True,
             timeout=30
         )
-        result = await asyncio.to_thread(extractor.quick_run)
-        if result:
-            self._google_cookie = result["cookie"]
-            self._google_cookie_timestamp = now
-            return self._google_cookie
-        else:
-            return self.default_cookies.get("google")
+        try:
+            result = await asyncio.to_thread(extractor.quick_run)
+            if result:
+                self._google_cookie = result["cookie"]
+                self._google_cookie_timestamp = now
+                return self._google_cookie
+        except Exception:
+            pass
+        return self.default_cookies.get("google")
 
     def _is_gif(self, file: FileContent) -> bool:
         """
@@ -136,9 +138,9 @@ class BaseSearchModel:
             return file.startswith((b'GIF87a', b'GIF89a'))
         return False
 
-    def _convert_gif_to_jpeg(self, file: FileContent) -> bytes:
+    async def _convert_gif_to_jpeg(self, file: FileContent) -> bytes:
         """
-        将GIF图像转换为JPEG格式
+        将GIF图像转换为JPEG格式（异步方法，在单独线程中执行）
 
         参数:
             file: GIF格式的文件内容
@@ -146,16 +148,18 @@ class BaseSearchModel:
         返回:
             bytes: 转换后的JPEG格式图像数据
         """
-        if isinstance(file, bytes):
-            img_data = file
-        else:
-            with open(file, 'rb') as f:
-                img_data = f.read()
-        img = Image.open(io.BytesIO(img_data))
-        img.seek(0)
-        jpeg_io = io.BytesIO()
-        img.convert('RGB').save(jpeg_io, 'JPEG', quality=85)
-        return jpeg_io.getvalue()
+        def convert_image():
+            if isinstance(file, bytes):
+                img_data = file
+            else:
+                with open(file, 'rb') as f:
+                    img_data = f.read()
+            img = Image.open(io.BytesIO(img_data))
+            img.seek(0)
+            jpeg_io = io.BytesIO()
+            img.convert('RGB').save(jpeg_io, 'JPEG', quality=85)
+            return jpeg_io.getvalue()
+        return await asyncio.to_thread(convert_image)
 
     async def search(self, api: str, file: FileContent = None,
                      url: Optional[str] = None, **kwargs: Any) -> str:
@@ -182,7 +186,7 @@ class BaseSearchModel:
         if file and url:
             raise ValueError("file 和 url 参数不能同时提供")
         if file and not url and self._is_gif(file):
-            file = self._convert_gif_to_jpeg(file)
+            file = await self._convert_gif_to_jpeg(file)
         try:
             engine_class = ENGINE_MAP[api]
             default_params = self.default_params.get(api, {})
@@ -233,8 +237,8 @@ class BaseSearchModel:
         try:
             result = await self.search(api=api, file=file, url=url, **kwargs)
             print(result)
-        except Exception as e:
-            print(f"❌ {api} 搜索失败: {e}")
+        except Exception:
+            print(f"❌ {api} 搜索失败")
 
     async def search_and_draw(self, api: str, file: FileContent = None,
                               url: Optional[str] = None, **kwargs: Any) -> Image.Image:
@@ -253,11 +257,17 @@ class BaseSearchModel:
         try:
             result = await self.search(api=api, file=file, url=url, **kwargs)
             source_image = None
+            
+            def load_image():
+                if file is not None:
+                    if isinstance(file, (str, Path)):
+                        return Image.open(file)
+                    elif isinstance(file, bytes):
+                        return Image.open(io.BytesIO(file))
+                return None
+            
             if file is not None:
-                if isinstance(file, (str, Path)):
-                    source_image = Image.open(file)
-                elif isinstance(file, bytes):
-                    source_image = Image.open(io.BytesIO(file))
+                source_image = await asyncio.to_thread(load_image)
             elif url is not None:
                 network_kwargs = {}
                 if self.proxies:
@@ -267,10 +277,11 @@ class BaseSearchModel:
                 async with Network(**network_kwargs) as client:
                     response = await client.get(url)
                     img_data = await response.aread()
-                    source_image = Image.open(io.BytesIO(img_data))
-            return self.draw_results(api, result, source_image)
-        except Exception as e:
-            return self.draw_error(api, str(e))
+                    source_image = await asyncio.to_thread(lambda: Image.open(io.BytesIO(img_data)))
+            
+            return await asyncio.to_thread(self.draw_results, api, result, source_image)
+        except Exception:
+            return await asyncio.to_thread(self.draw_error, api, "搜索失败")
 
     def _format_error(self, api: str, error_msg: str) -> str:
         """

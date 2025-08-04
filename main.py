@@ -105,34 +105,26 @@ def get_img_urls(message) -> str:
     raw_message = getattr(message, 'raw_message', '')
     if isinstance(raw_message, dict) and "message" in raw_message:
         raw_message_str = str(raw_message.get("message", []))
-        
-        # 解析图片类型
         image_match = re.search(r"'type':\s*'image'.*?'url':\s*'([^']+)'", raw_message_str)
         if image_match:
             return image_match.group(1)
-        
-        # 解析文件类型（需要检查是否为图片格式）
         file_match = re.search(r"'type':\s*'file'.*?'file':\s*'([^']+)'", raw_message_str)
         if file_match:
             filename = file_match.group(1)
             IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff'}
             if os.path.splitext(filename.lower())[1] in IMAGE_EXTS:
-                # 从message组件中找到对应的URL
                 for component in getattr(message, 'message', []):
                     component_str = str(component)
                     if "type='File'" in component_str:
                         url_match = re.search(r"url='([^']+)'", component_str)
                         if url_match:
                             return url_match.group(1)
-    
-    # 从message组件中直接查找图片（用于引用图片等情况）
     for component in getattr(message, 'message', []):
         component_str = str(component)
         if "type='Image'" in component_str:
             url_match = re.search(r"url='([^']+)'", component_str)
             if url_match:
                 return url_match.group(1)
-    
     return ""
 
 def get_message_text(message) -> str:
@@ -300,9 +292,11 @@ class ImgRevSearcherPlugin(Star):
         with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
             temp_file.write(content)
             temp_file_path = temp_file.name
-        yield event.chain_result([AstrImage.fromFileSystem(temp_file_path)])
-        if os.path.exists(temp_file_path):
-            os.unlink(temp_file_path)
+        try:
+            yield event.chain_result([AstrImage.fromFileSystem(temp_file_path)])
+        finally:
+            if os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
 
     async def _send_engine_intro(self, event: AstrMessageEvent):
         """
@@ -498,6 +492,22 @@ class ImgRevSearcherPlugin(Star):
             del self.user_states[user_id]
         event.stop_event()
 
+    def _clear_waiting_states_before_search(self, user_id: str):
+        """
+        在执行搜索前清除用户等待状态
+        
+        参数:
+            user_id: 用户ID
+
+        返回:
+            无
+
+        异常:
+            无
+        """
+        if user_id in self.user_states:
+            del self.user_states[user_id]
+
     async def _handle_waiting_text_confirm(self, event: AstrMessageEvent, state: dict, user_id: str):
         """
         等待用户是否主动获取文本格式结果
@@ -565,6 +575,7 @@ class ImgRevSearcherPlugin(Star):
         if message_text in self.available_engines:
             state["engine"] = message_text
             if state.get("preloaded_img"):
+                self._clear_waiting_states_before_search(user_id)
                 try:
                     async for result in self._perform_search(event, state["engine"], state["preloaded_img"]):
                         yield result
@@ -649,6 +660,7 @@ class ImgRevSearcherPlugin(Star):
             state["preloaded_img"] = img_buffer
             updated = True
         if state.get("engine") and state.get("preloaded_img"):
+            self._clear_waiting_states_before_search(user_id)
             try:
                 async for result in self._perform_search(event, state["engine"], state["preloaded_img"]):
                     yield result
@@ -694,6 +706,7 @@ class ImgRevSearcherPlugin(Star):
         elif is_image_url(message_text):
             img_buffer = await self._download_img(message_text)
         if img_buffer:
+            self._clear_waiting_states_before_search(user_id)
             async for result in self._perform_search(event, state["engine"], img_buffer):
                 yield result
             event.stop_event()
@@ -745,7 +758,6 @@ class ImgRevSearcherPlugin(Star):
                         'engine_name': potential_engine,
                         'message': f"引擎 '{potential_engine}' 不存在，请提供有效的引擎名（如{example_engine}）"
                     }
-                
                 if len(parts) > 2 and is_image_url(parts[2]):
                     url_from_text = parts[2]
         if img_urls:
@@ -753,7 +765,6 @@ class ImgRevSearcherPlugin(Star):
         elif url_from_text:
             img_buffer = await self._download_img(url_from_text)
         return engine, img_buffer, error
-
 
     async def _handle_initial_search_command(self, event: AstrMessageEvent, user_id: str):
         """
@@ -792,6 +803,7 @@ class ImgRevSearcherPlugin(Star):
             event.stop_event()
             return
         if engine and img_buffer:
+            self._clear_waiting_states_before_search(user_id)
             try:
                 async for result in self._perform_search(event, engine, img_buffer):
                     yield result

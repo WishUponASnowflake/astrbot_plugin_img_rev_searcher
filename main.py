@@ -89,34 +89,51 @@ def split_text_by_length(text: str, max_length: int = 4000) -> List[str]:
         text = text[cut_index:]
     return result
 
-def get_img_urls(message) -> List[str]:
+def get_img_urls(message) -> str:
     """
-    从消息对象中提取所有图片的URL
+    从消息对象中提取第一张图片的URL
 
     参数:
         message: 消息体对象，可含message或raw_message属性
 
     返回:
-        List[str]: 图片URL列表
+        str: 图片URL，如果没有找到则返回空字符串
 
     异常:
         无
     """
-    img_urls = []
-    for component_str in getattr(message, 'message', []):
-        if "type='Image'" in str(component_str):
-            url_match = re.search(r"url='([^']+)'", str(component_str))
-            if url_match:
-                img_urls.append(url_match.group(1))
     raw_message = getattr(message, 'raw_message', '')
     if isinstance(raw_message, dict) and "message" in raw_message:
-        for msg_part in raw_message.get("message", []):
-            if msg_part.get("type") == "image":
-                data = msg_part.get("data", {})
-                url = data.get("url", "")
-                if url and url not in img_urls:
-                    img_urls.append(url)
-    return img_urls
+        raw_message_str = str(raw_message.get("message", []))
+        
+        # 解析图片类型
+        image_match = re.search(r"'type':\s*'image'.*?'url':\s*'([^']+)'", raw_message_str)
+        if image_match:
+            return image_match.group(1)
+        
+        # 解析文件类型（需要检查是否为图片格式）
+        file_match = re.search(r"'type':\s*'file'.*?'file':\s*'([^']+)'", raw_message_str)
+        if file_match:
+            filename = file_match.group(1)
+            IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff'}
+            if os.path.splitext(filename.lower())[1] in IMAGE_EXTS:
+                # 从message组件中找到对应的URL
+                for component in getattr(message, 'message', []):
+                    component_str = str(component)
+                    if "type='File'" in component_str:
+                        url_match = re.search(r"url='([^']+)'", component_str)
+                        if url_match:
+                            return url_match.group(1)
+    
+    # 从message组件中直接查找图片（用于引用图片等情况）
+    for component in getattr(message, 'message', []):
+        component_str = str(component)
+        if "type='Image'" in component_str:
+            url_match = re.search(r"url='([^']+)'", component_str)
+            if url_match:
+                return url_match.group(1)
+    
+    return ""
 
 def get_message_text(message) -> str:
     """
@@ -625,7 +642,7 @@ class ImgRevSearcherPlugin(Star):
                     return
         img_buffer = None
         if img_urls:
-            img_buffer = await self._download_img(img_urls[0])
+            img_buffer = await self._download_img(img_urls)
         elif is_image_url(message_text):
             img_buffer = await self._download_img(message_text)
         if img_buffer and not state.get('preloaded_img'):
@@ -673,7 +690,7 @@ class ImgRevSearcherPlugin(Star):
         message_text = get_message_text(event.message_obj)
         img_buffer = None
         if img_urls:
-            img_buffer = await self._download_img(img_urls[0])
+            img_buffer = await self._download_img(img_urls)
         elif is_image_url(message_text):
             img_buffer = await self._download_img(message_text)
         if img_buffer:
@@ -732,7 +749,7 @@ class ImgRevSearcherPlugin(Star):
                 if len(parts) > 2 and is_image_url(parts[2]):
                     url_from_text = parts[2]
         if img_urls:
-            img_buffer = await self._download_img(img_urls[0])
+            img_buffer = await self._download_img(img_urls)
         elif url_from_text:
             img_buffer = await self._download_img(url_from_text)
         return engine, img_buffer, error

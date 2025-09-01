@@ -194,9 +194,16 @@ class ImgRevSearcherPlugin(Star):
         timeout_settings = config.get("timeout_settings", {})
         self.search_params_timeout = timeout_settings.get("search_params_timeout", 30)
         self.text_confirm_timeout = timeout_settings.get("text_confirm_timeout", 30)
-        trigger_keyword = config.get("trigger_keyword", "以图搜图")
+        keyword_config = config.get("keyword", {})
+        trigger_keyword = keyword_config.get("trigger_keyword", "以图搜图")
         self.trigger_keyword = trigger_keyword if trigger_keyword.strip() else "以图搜图"
         self.auto_send_text_results = config.get("auto_send_text_results", False)
+        engine_keywords_config = keyword_config.get("engine_keywords", {})
+        self.engine_keywords = {}
+        for engine in ALL_ENGINES:
+            keyword = engine_keywords_config.get(engine)
+            if keyword and keyword.strip():
+                self.engine_keywords[keyword.strip().lower()] = engine
         self.search_model = BaseSearchModel(
             proxies=config.get("proxies", ""),
             timeout=60,
@@ -315,7 +322,7 @@ class ImgRevSearcherPlugin(Star):
             无
         """
         def create_engine_intro_image():
-            width = 800
+            width = 1000
             cell_height = 50
             header_height = 60
             title_height = 70
@@ -352,7 +359,7 @@ class ImgRevSearcherPlugin(Star):
             draw.text((title_x, 25), title, font=title_font, fill=COLOR_THEME["header_text"])
             table_x = 20
             table_width = width - 40
-            col_widths = [int(table_width * 0.20), int(table_width * 0.50), int(table_width * 0.30)]
+            col_widths = [int(table_width * 0.15), int(table_width * 0.40), int(table_width * 0.20), int(table_width * 0.25)]
             table_y = title_height + 10
             table_bottom = table_y + header_height + cell_height * len(self.available_engines)
             draw.rectangle([table_x, table_y, table_x + sum(col_widths), table_y + header_height], fill=COLOR_THEME["table_header"])
@@ -363,7 +370,7 @@ class ImgRevSearcherPlugin(Star):
                 row_bg = COLOR_THEME["cell_bg_even"] if idx % 2 == 0 else COLOR_THEME["cell_bg_odd"]
                 draw.rectangle([table_x, y, table_x + sum(col_widths), y + cell_height], fill=row_bg)
                 y += cell_height
-            headers = ["引擎", "网址", "二次元图片专用"]
+            headers = ["引擎", "网址", "二次元图片专用", "关键词"]
             x = table_x
             for i, header in enumerate(headers):
                 text_width = draw.textlength(header, font=header_font) if hasattr(draw, 'textlength') else header_font.getsize(header)[0]
@@ -384,6 +391,13 @@ class ImgRevSearcherPlugin(Star):
                 mark_color = COLOR_THEME["success"] if info["anime"] else COLOR_THEME["fail"]
                 mark_width = draw.textlength(mark, font=header_font) if hasattr(draw, 'textlength') else header_font.getsize(mark)[0]
                 draw.text((x + (col_widths[2] - mark_width) // 2, y + (cell_height - 18) // 2), mark, font=header_font, fill=mark_color)
+                x += col_widths[2]
+                keyword = engine
+                for custom_keyword, engine_name in self.engine_keywords.items():
+                    if engine_name == engine:
+                        keyword = custom_keyword
+                        break
+                draw.text((x + 15, y + (cell_height - 16) // 2), keyword, font=body_font, fill=COLOR_THEME["hint"])
                 y += cell_height
             draw.rectangle([table_x, table_y, table_x + sum(col_widths), table_bottom], outline=COLOR_THEME["border"], width=border_width)
             for i in range(1, len(self.available_engines) + 1):
@@ -515,6 +529,21 @@ class ImgRevSearcherPlugin(Star):
             del self.user_states[user_id]
         event.stop_event()
 
+    def _get_engine_by_name(self, engine_name: str) -> str:
+        """
+        根据引擎名称或关键词获取实际的引擎标识符
+        
+        参数:
+            engine_name: 引擎名称或关键词
+            
+        返回:
+            str: 实际的引擎标识符，如果未找到则返回原名称
+        """
+        engine_name_lower = engine_name.lower()
+        if engine_name_lower in self.engine_keywords:
+            return self.engine_keywords[engine_name_lower]
+        return engine_name
+
     def _clear_waiting_states_before_search(self, user_id: str):
         """
         在执行搜索前清除用户等待状态
@@ -595,8 +624,9 @@ class ImgRevSearcherPlugin(Star):
             state["timestamp"] = time.time()
             event.stop_event()
             return
-        if message_text in self.available_engines:
-            state["engine"] = message_text
+        actual_engine = self._get_engine_by_name(message_text)
+        if actual_engine in self.available_engines:
+            state["engine"] = actual_engine
             if state.get("preloaded_img"):
                 self._clear_waiting_states_before_search(user_id)
                 try:
@@ -609,7 +639,7 @@ class ImgRevSearcherPlugin(Star):
                 state["timestamp"] = time.time()
                 yield event.plain_result(f"已选择引擎: {message_text}，请在{self.search_params_timeout}秒内发送一张图片，我会进行搜索")
         else:
-            if message_text in ALL_ENGINES and message_text not in self.available_engines:
+            if actual_engine in ALL_ENGINES and actual_engine not in self.available_engines:
                 yield event.plain_result(f"引擎 '{message_text}' 已被禁用，请联系管理员在配置中启用或选择其他引擎（如{example_engine}）")
                 state["timestamp"] = time.time()
                 async for result in self._send_engine_prompt(event, state):
@@ -647,10 +677,11 @@ class ImgRevSearcherPlugin(Star):
         img_urls = get_img_urls(event.message_obj)
         updated = False
         if message_text and not state.get('engine'):
-            if message_text in self.available_engines:
-                state["engine"] = message_text
+            actual_engine = self._get_engine_by_name(message_text)
+            if actual_engine in self.available_engines:
+                state["engine"] = actual_engine
                 updated = True
-            elif message_text in ALL_ENGINES:
+            elif actual_engine in ALL_ENGINES:
                 yield event.plain_result(
                     f"引擎 '{message_text}' 已被禁用，请联系管理员在配置中启用或选择其他引擎（如{example_engine}）"
                 )
@@ -767,9 +798,10 @@ class ImgRevSearcherPlugin(Star):
                 url_from_text = parts[1]
             else:
                 potential_engine = parts[1].lower()
-                if potential_engine in self.available_engines:
-                    engine = potential_engine
-                elif potential_engine in ALL_ENGINES:
+                actual_engine = self._get_engine_by_name(potential_engine)
+                if actual_engine in self.available_engines:
+                    engine = actual_engine
+                elif actual_engine in ALL_ENGINES:
                     error = {
                         'type': 'disabled_engine',
                         'engine_name': potential_engine,

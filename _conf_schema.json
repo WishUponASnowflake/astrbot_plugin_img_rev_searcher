@@ -5,6 +5,12 @@
     "hint": "http://host:port，例如：http://127.0.0.1:7890",
     "default": null
   },
+  "auto_send_text_results": {
+    "description": "是否自动发送文字版本的搜索结果",
+    "type": "bool",
+    "hint": "搜索完成后是否自动发送文字格式的搜索结果，无需用户确认",
+    "default": false
+  },
   "timeout_settings": {
     "description": "超时时间设置",
     "type": "object",
@@ -22,12 +28,6 @@
         "default": 30
       }
     }
-  },
-  "auto_send_text_results": {
-    "description": "是否自动发送文字版本的搜索结果",
-    "type": "bool",
-    "hint": "搜索完成后是否自动发送文字格式的搜索结果，无需用户确认",
-    "default": false
   },
   "keyword": {
     "description": "关键词配置",

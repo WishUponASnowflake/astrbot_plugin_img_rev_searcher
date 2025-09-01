@@ -5,118 +5,6 @@
     "hint": "http://host:port，例如：http://127.0.0.1:7890",
     "default": null
   },
-  "keyword": {
-    "description": "关键词配置",
-    "type": "object",
-    "hint": "配置触发搜索的关键词和各搜索引擎的自定义关键词",
-    "items": {
-      "trigger_keyword": {
-        "description": "触发搜索的关键词",
-        "type": "string",
-        "hint": "用户发送此关键词时触发图片搜索功能，留空则使用默认关键词",
-        "default": "以图搜图"
-      },
-      "engine_keywords": {
-        "description": "各搜索引擎的自定义关键词",
-        "type": "object",
-        "hint": "为每个搜索引擎配置自定义的关键词，用户可以使用这些关键词指定引擎，留空则使用默认引擎名",
-        "items": {
-          "animetrace": {
-            "description": "AnimeTrace搜索引擎关键词",
-            "type": "string",
-            "default": "a"
-          },
-          "baidu": {
-            "description": "百度搜索引擎关键词",
-            "type": "string",
-            "default": "b1"
-          },
-          "bing": {
-            "description": "Bing搜索引擎关键词",
-            "type": "string",
-            "default": "b2"
-          },
-          "copyseeker": {
-            "description": "CopySeeker搜索引擎关键词",
-            "type": "string",
-            "default": "c"
-          },
-          "ehentai": {
-            "description": "E-Hentai搜索引擎关键词",
-            "type": "string",
-            "default": "e"
-          },
-          "google": {
-            "description": "Google Lens搜索引擎关键词",
-            "type": "string",
-            "default": "g"
-          },
-          "saucenao": {
-            "description": "SauceNAO搜索引擎关键词",
-            "type": "string",
-            "default": "s"
-          },
-          "tineye": {
-            "description": "TinEye搜索引擎关键词",
-            "type": "string",
-            "default": "t"
-          }
-        }
-      }
-    }
-  },
-  "auto_send_text_results": {
-    "description": "是否自动发送文字版本的搜索结果",
-    "type": "bool",
-    "hint": "搜索完成后是否自动发送文字格式的搜索结果，无需用户确认",
-    "default": false
-  },
-  "available_apis": {
-    "description": "各搜索引擎的启用状态",
-    "type": "object",
-    "items": {
-      "animetrace": {
-        "description": "是否启用AnimeTrace搜索",
-        "type": "bool",
-        "default": true
-      },
-      "baidu": {
-        "description": "是否启用百度搜索",
-        "type": "bool",
-        "default": true
-      },
-      "bing": {
-        "description": "是否启用Bing搜索",
-        "type": "bool",
-        "default": true
-      },
-      "copyseeker": {
-        "description": "是否启用CopySeeker搜索",
-        "type": "bool",
-        "default": false
-      },
-      "ehentai": {
-        "description": "是否启用E-Hentai/ExHentai搜索",
-        "type": "bool",
-        "default": true
-      },
-      "google": {
-        "description": "是否启用Google Lens搜索",
-        "type": "bool",
-        "default": true
-      },
-      "saucenao": {
-        "description": "是否启用SauceNAO搜索",
-        "type": "bool",
-        "default": true
-      },
-      "tineye": {
-        "description": "是否启用TinEye搜索",
-        "type": "bool",
-        "default": true
-      }
-    }
-  },
   "timeout_settings": {
     "description": "超时时间设置",
     "type": "object",
@@ -135,12 +23,124 @@
       }
     }
   },
+  "auto_send_text_results": {
+    "description": "是否自动发送文字版本的搜索结果",
+    "type": "bool",
+    "hint": "搜索完成后是否自动发送文字格式的搜索结果，无需用户确认",
+    "default": false
+  },
+  "keyword": {
+    "description": "关键词配置",
+    "type": "object",
+    "hint": "配置触发搜索的关键词和各搜索引擎的自定义关键词",
+    "items": {
+      "trigger_keyword": {
+        "description": "触发搜索的关键词",
+        "type": "string",
+        "hint": "用户发送此关键词时触发图片搜索功能，留空则使用默认关键词",
+        "default": "以图搜图"
+      },
+      "engine_keywords": {
+        "description": "各搜索引擎的自定义关键词",
+        "type": "object",
+        "hint": "为每个搜索引擎配置自定义的关键词，用户可以使用这些关键词指定引擎，留空则使用默认引擎名",
+        "items": {
+          "animetrace": {
+            "description": "AnimeTrace",
+            "type": "string",
+            "default": "a"
+          },
+          "baidu": {
+            "description": "Baidu",
+            "type": "string",
+            "default": "b1"
+          },
+          "bing": {
+            "description": "Bing",
+            "type": "string",
+            "default": "b2"
+          },
+          "copyseeker": {
+            "description": "CopySeeker",
+            "type": "string",
+            "default": "c"
+          },
+          "ehentai": {
+            "description": "E-Hentai",
+            "type": "string",
+            "default": "e"
+          },
+          "google": {
+            "description": "Google Lens",
+            "type": "string",
+            "default": "g"
+          },
+          "saucenao": {
+            "description": "SauceNAO",
+            "type": "string",
+            "default": "s"
+          },
+          "tineye": {
+            "description": "TinEye",
+            "type": "string",
+            "default": "t"
+          }
+        }
+      }
+    }
+  },
+  "available_apis": {
+    "description": "各搜索引擎的启用状态",
+    "type": "object",
+    "items": {
+      "animetrace": {
+        "description": "AnimeTrace",
+        "type": "bool",
+        "default": true
+      },
+      "baidu": {
+        "description": "Baidu",
+        "type": "bool",
+        "default": true
+      },
+      "bing": {
+        "description": "Bing",
+        "type": "bool",
+        "default": true
+      },
+      "copyseeker": {
+        "description": "CopySeeker",
+        "type": "bool",
+        "default": false
+      },
+      "ehentai": {
+        "description": "E-Hentai/ExHentai",
+        "type": "bool",
+        "default": true
+      },
+      "google": {
+        "description": "Google Lens",
+        "type": "bool",
+        "default": true
+      },
+      "saucenao": {
+        "description": "SauceNAO",
+        "type": "bool",
+        "default": true
+      },
+      "tineye": {
+        "description": "TinEye",
+        "type": "bool",
+        "default": true
+      }
+    }
+  },
   "default_params": {
     "description": "各搜索引擎的默认参数",
     "type": "object",
     "items": {
       "animetrace": {
-        "description": "AnimeTrace搜索引擎参数",
+        "description": "AnimeTrace",
         "type": "object",
         "items": {
           "model": {
@@ -164,7 +164,7 @@
         }
       },
       "ehentai": {
-        "description": "EHentai搜索引擎参数",
+        "description": "EHentai",
         "type": "object",
         "items": {
           "is_ex": {
@@ -191,7 +191,7 @@
         }
       },
       "google": {
-        "description": "Google Lens搜索引擎参数",
+        "description": "Google Lens",
         "type": "object",
         "items": {
           "search_type": {
@@ -223,7 +223,7 @@
         }
       },
       "saucenao": {
-        "description": "SauceNAO搜索引擎参数",
+        "description": "SauceNAO",
         "type": "object",
         "items": {
           "api_key": {
@@ -255,7 +255,7 @@
         }
       },
       "tineye": {
-        "description": "TinEye搜索引擎参数",
+        "description": "TinEye",
         "type": "object",
         "items": {
           "show_unavailable_domains": {
@@ -295,13 +295,13 @@
     "hint": "部分搜索引擎需要Cookie来获取更好的搜索结果",
     "items": {
       "ehentai": {
-        "description": "EHentai的Cookie",
+        "description": "EHentai",
         "type": "string",
         "hint": "格式如: ipb_member_id=; ipb_pass_hash=; igneous=，ExHentai搜索必须提供有效Cookie",
         "default": null
       },
       "google": {
-        "description": "Google的Cookie",
+        "description": "Google",
         "type": "string",
         "hint": "无痕模式Cookie有效期约1天，建议不要使用登录状态的Cookie",
         "default": null

@@ -194,6 +194,9 @@ class ImgRevSearcherPlugin(Star):
         timeout_settings = config.get("timeout_settings", {})
         self.search_params_timeout = timeout_settings.get("search_params_timeout", 30)
         self.text_confirm_timeout = timeout_settings.get("text_confirm_timeout", 30)
+        trigger_keyword = config.get("trigger_keyword", "以图搜图")
+        self.trigger_keyword = trigger_keyword if trigger_keyword.strip() else "以图搜图"
+        self.auto_send_text_results = config.get("auto_send_text_results", False)
         self.search_model = BaseSearchModel(
             proxies=config.get("proxies", ""),
             timeout=60,
@@ -437,13 +440,33 @@ class ImgRevSearcherPlugin(Star):
         img_bytes = await asyncio.to_thread(process_image)
         async for result in self._send_image(event, img_bytes):
                 yield result
-        yield event.plain_result(f"需要文本格式的结果吗？回复\"是\"以获取，{self.text_confirm_timeout}秒内有效")
-        user_id = event.get_sender_id()
-        self.user_states[user_id] = {
-            "step": "waiting_text_confirm",
-            "timestamp": time.time(),
-            "result_text": result_text
-        }
+        if self.auto_send_text_results:
+            text_parts = split_text_by_length(result_text)
+            sender_name = "图片搜索bot"
+            sender_id = event.get_self_id()
+            try:
+                sender_id = int(sender_id)
+            except Exception:
+                pass
+            for i, part in enumerate(text_parts):
+                node = Node(
+                    name=sender_name,
+                    uin=sender_id,
+                    content=[Plain(f"[  搜索结果 {i + 1} / {len(text_parts)}  ]\n\n{part}")]
+                )
+                nodes = Nodes([node])
+                try:
+                    await event.send(event.chain_result([nodes]))
+                except Exception as e:
+                    yield event.plain_result(f"发送搜索结果失败: {str(e)}")
+        else:
+            yield event.plain_result(f"需要文本格式的结果吗？回复\"是\"以获取，{self.text_confirm_timeout}秒内有效")
+            user_id = event.get_sender_id()
+            self.user_states[user_id] = {
+                "step": "waiting_text_confirm",
+                "timestamp": time.time(),
+                "result_text": result_text
+            }
 
     async def _send_engine_prompt(self, event: AstrMessageEvent, state: dict):
         """
@@ -838,7 +861,7 @@ class ImgRevSearcherPlugin(Star):
         """
         user_id = event.get_sender_id()
         message_text = get_message_text(event.message_obj)
-        if message_text.strip().startswith("以图搜图"):
+        if message_text.strip().startswith(self.trigger_keyword):
             async for result in self._handle_initial_search_command(event, user_id):
                 yield result
             return

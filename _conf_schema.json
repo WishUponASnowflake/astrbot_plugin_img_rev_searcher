@@ -1,4 +1,16 @@
 {
+  "trigger_keyword": {
+    "description": "触发搜索的关键词",
+    "type": "string",
+    "hint": "用户发送此关键词时触发图片搜索功能",
+    "default": "以图搜图"
+  },
+  "auto_send_text_results": {
+    "description": "是否自动发送文字版本的搜索结果",
+    "type": "bool",
+    "hint": "搜索完成后是否自动发送文字格式的搜索结果，无需用户确认",
+    "default": false
+  },
   "proxies": {
     "description": "代理服务器地址",
     "type": "string",

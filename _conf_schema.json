@@ -7,61 +7,53 @@
       "trigger_keyword": {
         "description": "触发搜索的关键词",
         "type": "string",
-        "hint": "用户发送此关键词时触发图片搜索功能",
+        "hint": "用户发送此关键词时触发图片搜索功能，留空则使用默认关键词",
         "default": "以图搜图"
       },
       "engine_keywords": {
         "description": "各搜索引擎的自定义关键词",
         "type": "object",
-        "hint": "为每个搜索引擎配置自定义的关键词，用户可以使用这些关键词直接指定引擎",
+        "hint": "为每个搜索引擎配置自定义的关键词，用户可以使用这些关键词指定引擎，留空则使用默认引擎名",
         "items": {
           "animetrace": {
             "description": "AnimeTrace搜索引擎关键词",
             "type": "string",
-            "hint": "用户可以使用此关键词直接指定AnimeTrace引擎，留空则使用默认引擎名",
-            "default": null
+            "default": "a"
           },
           "baidu": {
             "description": "百度搜索引擎关键词",
             "type": "string",
-            "hint": "用户可以使用此关键词直接指定百度引擎，留空则使用默认引擎名",
-            "default": null
+            "default": "b1"
           },
           "bing": {
             "description": "Bing搜索引擎关键词",
             "type": "string",
-            "hint": "用户可以使用此关键词直接指定Bing引擎，留空则使用默认引擎名",
-            "default": null
+            "default": "b2"
           },
           "copyseeker": {
             "description": "CopySeeker搜索引擎关键词",
             "type": "string",
-            "hint": "用户可以使用此关键词直接指定CopySeeker引擎，留空则使用默认引擎名",
-            "default": null
+            "default": "c"
           },
           "ehentai": {
             "description": "E-Hentai搜索引擎关键词",
             "type": "string",
-            "hint": "用户可以使用此关键词直接指定E-Hentai引擎，留空则使用默认引擎名",
-            "default": null
+            "default": "e"
           },
           "google": {
             "description": "Google Lens搜索引擎关键词",
             "type": "string",
-            "hint": "用户可以使用此关键词直接指定Google Lens引擎，留空则使用默认引擎名",
-            "default": null
+            "default": "g"
           },
           "saucenao": {
             "description": "SauceNAO搜索引擎关键词",
             "type": "string",
-            "hint": "用户可以使用此关键词直接指定SauceNAO引擎，留空则使用默认引擎名",
-            "default": null
+            "default": "s"
           },
           "tineye": {
             "description": "TinEye搜索引擎关键词",
             "type": "string",
-            "hint": "用户可以使用此关键词直接指定TinEye引擎，留空则使用默认引擎名",
-            "default": null
+            "default": "t"
           }
         }
       }

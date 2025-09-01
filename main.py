@@ -504,11 +504,11 @@ class ImgRevSearcherPlugin(Star):
             async for result in self._send_engine_intro(event):
                 yield result
         if state.get('preloaded_img'):
-            yield event.plain_result(f"图片已接收，请回复引擎名（如{example_engine}），{self.search_params_timeout}秒内有效")
+            yield event.plain_result(f"图片已接收，请选择引擎（回复引擎名或关键词，如 {example_engine} 或 a），{self.search_params_timeout}秒内有效")
         elif state.get('engine'):
             yield event.plain_result(f"已选择引擎: {state['engine']}，请发送图片或图片URL，{self.search_params_timeout}秒内有效")
         else:
-            yield event.plain_result(f"请选择引擎（回复引擎名或关键词，如{example_engine}或a）并发送图片，{self.search_params_timeout}秒内有效")
+            yield event.plain_result(f"请选择引擎（回复引擎名或关键词，如 {example_engine} 或 a）并发送图片，{self.search_params_timeout}秒内有效")
 
     async def _handle_timeout(self, event: AstrMessageEvent, user_id: str):
         """

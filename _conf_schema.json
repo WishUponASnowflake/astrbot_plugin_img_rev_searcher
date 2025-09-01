@@ -6,23 +6,23 @@
     "default": null
   },
   "auto_send_text_results": {
-    "description": "是否自动发送文字版本的搜索结果",
+    "description": "是否自动发送文本格式搜索结果",
     "type": "bool",
-    "hint": "搜索完成后是否自动发送文字格式的搜索结果，无需用户确认",
+    "hint": "搜索完成后是否自动发送文本格式搜索结果，无需用户确认",
     "default": false
   },
   "timeout_settings": {
-    "description": "超时时间设置",
+    "description": "超时配置",
     "type": "object",
     "items": {
       "search_params_timeout": {
-        "description": "等待搜索参数（引擎名、图片等）的超时时间（秒）",
+        "description": "等待搜索参数（引擎名、图片等）的时间（秒）",
         "type": "int",
         "hint": "用户在发送'以图搜图'命令后，等待提供引擎名称和图片的最大时间",
         "default": 30
       },
       "text_confirm_timeout": {
-        "description": "等待确认是否需要文本格式结果的超时时间（秒）",
+        "description": "等待确认是否需要文本格式结果的时间（秒）",
         "type": "int",
         "hint": "搜索完成后，等待用户确认是否需要文本格式结果的最大时间",
         "default": 30
@@ -30,7 +30,7 @@
     }
   },
   "keyword": {
-    "description": "关键词配置",
+    "description": "关键词",
     "type": "object",
     "hint": "配置触发搜索的关键词和各搜索引擎的自定义关键词",
     "items": {
@@ -41,9 +41,9 @@
         "default": "以图搜图"
       },
       "engine_keywords": {
-        "description": "各搜索引擎的自定义关键词",
+        "description": "各搜索引擎的自定义关键词（别名）",
         "type": "object",
-        "hint": "为每个搜索引擎配置自定义的关键词，用户可以使用这些关键词指定引擎，留空则使用默认引擎名",
+        "hint": "为每个搜索引擎配置自定义关键词，用户可以使用这些关键词指定引擎，留空则使用默认引擎名",
         "items": {
           "animetrace": {
             "description": "AnimeTrace",
@@ -90,7 +90,7 @@
     }
   },
   "available_apis": {
-    "description": "各搜索引擎的启用状态",
+    "description": "启用状态",
     "type": "object",
     "items": {
       "animetrace": {
@@ -136,7 +136,7 @@
     }
   },
   "default_params": {
-    "description": "各搜索引擎的默认参数",
+    "description": "默认参数",
     "type": "object",
     "items": {
       "animetrace": {
@@ -290,9 +290,9 @@
     }
   },
   "default_cookies": {
-    "description": "各搜索引擎的默认Cookie",
+    "description": "默认Cookie",
     "type": "object",
-    "hint": "部分搜索引擎需要Cookie来获取更好的搜索结果",
+    "hint": "部分搜索引擎需要Cookie以获取更好的搜索结果",
     "items": {
       "ehentai": {
         "description": "EHentai",
@@ -313,7 +313,7 @@
     "type": "object",
     "items": {
       "enabled": {
-        "description": "是否启用自动获取 Cookie",
+        "description": "是否自动获取 Cookie",
         "type": "bool",
         "default": true
       },

@@ -1,4 +1,10 @@
 {
+  "proxies": {
+    "description": "代理服务器地址",
+    "type": "string",
+    "hint": "http://host:port，例如：http://127.0.0.1:7890",
+    "default": null
+  },
   "keyword": {
     "description": "关键词配置",
     "type": "object",
@@ -64,12 +70,6 @@
     "type": "bool",
     "hint": "搜索完成后是否自动发送文字格式的搜索结果，无需用户确认",
     "default": false
-  },
-  "proxies": {
-    "description": "代理服务器地址",
-    "type": "string",
-    "hint": "http://host:port，例如：http://127.0.0.1:7890",
-    "default": null
   },
   "available_apis": {
     "description": "各搜索引擎的启用状态",

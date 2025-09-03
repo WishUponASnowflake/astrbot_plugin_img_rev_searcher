@@ -195,8 +195,12 @@ class ImgRevSearcherPlugin(Star):
         self.search_params_timeout = timeout_settings.get("search_params_timeout", 30)
         self.text_confirm_timeout = timeout_settings.get("text_confirm_timeout", 30)
         keyword_config = config.get("keyword", {})
-        trigger_keyword = keyword_config.get("trigger_keyword", "以图搜图")
-        self.trigger_keyword = trigger_keyword if trigger_keyword.strip() else "以图搜图"
+        trigger_keywords = keyword_config.get("trigger_keywords", ["以图搜图"])
+        # 确保触发关键词是列表格式，如果为空或无效则使用默认值
+        if isinstance(trigger_keywords, list) and trigger_keywords:
+            self.trigger_keywords = [kw.strip() for kw in trigger_keywords if kw and kw.strip()]
+        else:
+            self.trigger_keywords = ["以图搜图"]
         self.auto_send_text_results = config.get("auto_send_text_results", False)
         engine_keywords_config = keyword_config.get("engine_keywords", {})
         self.engine_keywords = {}
@@ -893,7 +897,8 @@ class ImgRevSearcherPlugin(Star):
         """
         user_id = event.get_sender_id()
         message_text = get_message_text(event.message_obj)
-        if message_text.strip().startswith(self.trigger_keyword):
+        # 检查是否以任意一个触发关键词开头
+        if any(message_text.strip().startswith(keyword) for keyword in self.trigger_keywords):
             async for result in self._handle_initial_search_command(event, user_id):
                 yield result
             return

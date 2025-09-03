@@ -34,12 +34,15 @@
     "type": "object",
     "hint": "配置触发搜索的关键词和各搜索引擎的自定义关键词",
     "items": {
-      "trigger_keyword": {
-        "description": "触发搜索的关键词",
-        "type": "string",
-        "hint": "用户发送此关键词时触发图片搜索功能，留空则使用默认关键词",
-        "default": "以图搜图"
-      },
+             "trigger_keywords": {
+         "description": "触发搜索的关键词列表",
+         "type": "array",
+         "hint": "用户发送任意一个关键词时触发图片搜索功能，留空则使用默认关键词",
+         "items": {
+           "type": "string"
+         },
+         "default": ["以图搜图"]
+       },
       "engine_keywords": {
         "description": "各搜索引擎的自定义关键词（别名）",
         "type": "object",
